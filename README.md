@@ -19,7 +19,7 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
   - **Puntos:** arrastrar para mover el panel.
   - **Tuerca:** abre los ajustes de apariencia de la app.
   - **✕:** cierra el panel. Se vuelve a abrir con **Activar touchpad** en la app.
-- **Franja inferior:** el **icono de teclado** de la izquierda abre y cierra el teclado a mano; el resto de la franja es el asa para cambiar el tamaño del panel (ancho y alto). Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
+- **Franja inferior:** el **icono de teclado** de la izquierda abre y cierra el teclado a mano; el **asa de la esquina derecha** (solo ella) cambia el tamaño del panel (ancho y alto). El resto de la franja no hace nada. Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
 - **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet, venga el foco del touchpad o de un mouse físico (se puede desactivar con **Desactivar teclado automático** en la app). También se abre a mano con el icono de la franja inferior o con el mosaico **Teclado** del centro de control.
 
 ## Atajos en el centro de control
@@ -37,7 +37,9 @@ Formas de cursor: Clásico, Contorno, Moderno (cuña de dos tonos), Punto y Mira
 
 ## Teclado
 
-Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No depende del touchpad: solo necesita una pantalla externa conectada y la tablet desbloqueada. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior, su ◐ cambia la transparencia, la ✕ lo cierra y la franja inferior cambia su tamaño (las teclas crecen con el ancho).
+Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No depende del touchpad: solo necesita una pantalla externa conectada y la tablet desbloqueada. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior. En esa barra, de izquierda a derecha: el título con el texto del campo, **◐** (transparencia), **123** (añade una fila de números sobre las letras; se recuerda) y **✕** (cerrar). El asa de la esquina inferior derecha cambia su tamaño (las teclas crecen con el ancho).
+
+**Colocación.** Al abrirse, el teclado busca la posición libre más cercana a la habitual que no tape el panel del touchpad (izquierda, derecha, encima, debajo o las esquinas); si no hay espacio, elige la que lo tape menos, nunca por completo. También se aparta solo al terminar de mover o redimensionar el panel, al redimensionar el teclado o al activar el touchpad con el teclado abierto. Si lo arrastras tú encima del panel, se queda donde lo dejes.
 
 - Requiere el permiso de accesibilidad de **leer el contenido de ventanas** (para encontrar el campo enfocado en el TV).
 - En campos de contraseña Android no entrega el texto real, así que el teclado lleva su propio registro de lo escrito.

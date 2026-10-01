@@ -67,10 +67,20 @@ class TouchpadPanel(
 
     val isShown get() = root != null
 
-    fun show() {
+    /** Se invoca al terminar de mover o redimensionar el panel (para que el teclado se aparte si lo tapa). */
+    var onSettled: (() -> Unit)? = null
+
+    /** Rectángulo que ocupa el panel en pantalla (ventana incluida su margen), o null si no se muestra. */
+    fun bounds(): android.graphics.Rect? {
+        val params = lp ?: return null
+        return android.graphics.Rect(params.x, params.y, params.x + params.width, params.y + params.height)
+    }
+
+    /** Muestra el panel. Devuelve true solo si se acaba de crear la ventana. */
+    fun show(): Boolean {
         if (root != null) {
             relayout()
-            return
+            return false
         }
         val margin = dp(MARGIN_DP)
         loadSize()
@@ -157,8 +167,10 @@ class TouchpadPanel(
             opacitySlider = slider
             padView = pad
             footerView = footer
+            return true
         } catch (t: Throwable) {
             ProbeLog.add("Panel: no se pudo crear el overlay: ${t.javaClass.simpleName}: ${t.message}")
+            return false
         }
     }
 
@@ -245,6 +257,7 @@ class TouchpadPanel(
 
     private fun saveSize() {
         prefs.edit().putInt(KEY_W, padWidth).putInt(KEY_H, padHeight).apply()
+        onSettled?.invoke()
     }
 
     private fun totalHeight() = dp(HANDLE_DP) + padHeight + dp(FOOTER_DP)
@@ -279,6 +292,7 @@ class TouchpadPanel(
     private fun savePosition() {
         val params = lp ?: return
         prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
+        onSettled?.invoke()
     }
 
     private fun clamp(params: WindowManager.LayoutParams, screenW: Int, screenH: Int) {

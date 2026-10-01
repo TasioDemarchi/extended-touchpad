@@ -35,9 +35,14 @@ class ResizeGripView(
     private val keyDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.subtleColor }
     private var lastX = 0f
     private var lastY = 0f
-    private var onKeyboardZone = false
+    private enum class Zone { NONE, KEYBOARD, RESIZE }
+
+    private var zone = Zone.NONE
 
     private fun keyboardZone() = height * 1.8f
+
+    /** Ancho de la esquina derecha que redimensiona: solo ahí está el asa. */
+    private fun gripZone() = 44f * d
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPaint(bg)
@@ -65,29 +70,33 @@ class ResizeGripView(
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                onKeyboardZone = onKeyboard != null && e.x <= keyboardZone()
+                zone = when {
+                    onKeyboard != null && e.x <= keyboardZone() -> Zone.KEYBOARD
+                    e.x >= width - gripZone() -> Zone.RESIZE
+                    else -> Zone.NONE // el resto de la franja no hace nada
+                }
                 lastX = e.rawX
                 lastY = e.rawY
             }
 
-            MotionEvent.ACTION_MOVE -> if (!onKeyboardZone) {
+            MotionEvent.ACTION_MOVE -> if (zone == Zone.RESIZE) {
                 cb.onResize(e.rawX - lastX, e.rawY - lastY)
                 lastX = e.rawX
                 lastY = e.rawY
             }
 
             MotionEvent.ACTION_UP -> {
-                if (onKeyboardZone) {
-                    if (e.x <= keyboardZone()) onKeyboard?.invoke()
-                } else {
-                    cb.onResizeEnd()
+                when (zone) {
+                    Zone.KEYBOARD -> if (e.x <= keyboardZone()) onKeyboard?.invoke()
+                    Zone.RESIZE -> cb.onResizeEnd()
+                    Zone.NONE -> Unit
                 }
-                onKeyboardZone = false
+                zone = Zone.NONE
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                if (!onKeyboardZone) cb.onResizeEnd()
-                onKeyboardZone = false
+                if (zone == Zone.RESIZE) cb.onResizeEnd()
+                zone = Zone.NONE
             }
         }
         return true

@@ -28,6 +28,8 @@ class OnScreenKeyboard(
     private val remote: RemoteInput,
     private val prefs: SharedPreferences,
     private val appearance: Appearance,
+    /** Rectángulo del panel del touchpad si está en pantalla; el teclado intenta no taparlo al abrirse. */
+    private val panelBounds: () -> android.graphics.Rect?,
     private val externalDisplayId: () -> Int,
 ) {
     private enum class Shift { OFF, ONCE, LOCK }
@@ -64,6 +66,9 @@ class OnScreenKeyboard(
 
     val isShown get() = root != null
 
+    /** Si está activa, las letras llevan encima una fila de números. Se recuerda entre aperturas. */
+    private val numberRow: Boolean get() = prefs.getBoolean(KEY_NUMBERS, false)
+
     /** Se invoca al abrirse o cerrarse el teclado (para actualizar el mosaico del centro de control). */
     var onVisibilityChanged: (() -> Unit)? = null
 
@@ -88,6 +93,13 @@ class OnScreenKeyboard(
         val opacityBtn = OpacityIconView(ctx, appearance).apply {
             setOnClickListener { showOpacitySlider() }
         }
+        val numbersBtn = NumberRowIconView(ctx, appearance) { numberRow }
+        numbersBtn.setOnClickListener {
+            prefs.edit().putBoolean(KEY_NUMBERS, !numberRow).apply()
+            numbersBtn.invalidate()
+            buildKeys()
+            avoidPanel() // el teclado crece o se encoge una fila: se recoloca si pasa a tapar el panel
+        }
         val closeBtn = TextView(ctx).apply {
             text = "✕"
             textSize = 18f
@@ -100,6 +112,7 @@ class OnScreenKeyboard(
             setBackgroundColor(appearance.barColor)
             addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
             addView(opacityBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(numbersBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
             addView(closeBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
         }
         installDrag(title)
@@ -124,6 +137,7 @@ class OnScreenKeyboard(
             override fun onResize(dx: Float, dy: Float) = resizeBy(dx)
             override fun onResizeEnd() {
                 prefs.edit().putInt(KEY_W, widthPx).apply()
+                avoidPanel()
             }
         })
         val cardView = LinearLayout(ctx).apply {
@@ -179,6 +193,7 @@ class OnScreenKeyboard(
         symbols = false
         buildKeys()
         refreshPreview()
+        placeAwayFromPanel()
         clampToScreen()
         hideSystemKeyboard()
         onVisibilityChanged?.invoke()
@@ -229,6 +244,63 @@ class OnScreenKeyboard(
         sentNode = null
         restoreSystemKeyboard()
         onVisibilityChanged?.invoke()
+    }
+
+    // ---------------------------------------------------------------- colocación
+
+    /** Recoloca el teclado si tapa el panel (tras mover o redimensionar el panel, o redimensionar el teclado). */
+    fun avoidPanel() {
+        if (!isShown) return
+        placeAwayFromPanel()
+        clampToScreen()
+    }
+
+    /**
+     * Al abrirse, busca la posición más cercana a la habitual donde el teclado no tape el panel del touchpad.
+     * Si no hay espacio para ninguna, elige la que lo tape menos: nunca queda cubierto por completo.
+     * La posición guardada no se toca: el ajuste es solo para esta apertura.
+     */
+    private fun placeAwayFromPanel() {
+        val params = lp ?: return
+        val r = root ?: return
+        val panel = panelBounds() ?: return
+        val screen = wm.maximumWindowMetrics.bounds
+        r.measure(
+            View.MeasureSpec.makeMeasureSpec(params.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val w = params.width
+        val h = r.measuredHeight
+        val maxX = max(0, screen.width() - w)
+        val maxY = max(0, screen.height() - h)
+        fun at(x: Int, y: Int) = android.graphics.Point(x.coerceIn(0, maxX), y.coerceIn(0, maxY))
+
+        val wanted = at(params.x, params.y)
+        val candidates = listOf(
+            wanted,
+            at(panel.left - w, wanted.y), // a la izquierda del panel
+            at(panel.right, wanted.y), // a la derecha
+            at(wanted.x, panel.top - h), // encima
+            at(wanted.x, panel.bottom), // debajo
+            at(0, maxY), at(maxX, maxY), at(0, 0), at(maxX, 0), // esquinas
+            at(maxX / 2, maxY), at(maxX / 2, 0), // centro inferior y superior
+        )
+
+        fun overlap(p: android.graphics.Point): Long {
+            val x = max(0, min(p.x + w, panel.right) - max(p.x, panel.left)).toLong()
+            val y = max(0, min(p.y + h, panel.bottom) - max(p.y, panel.top)).toLong()
+            return x * y
+        }
+
+        fun distance(p: android.graphics.Point): Long {
+            val dx = (p.x - wanted.x).toLong()
+            val dy = (p.y - wanted.y).toLong()
+            return dx * dx + dy * dy
+        }
+
+        val best = candidates.minWith(compareBy({ overlap(it) }, { distance(it) }))
+        params.x = best.x
+        params.y = best.y
     }
 
     // ---------------------------------------------------------------- tamaño
@@ -325,6 +397,7 @@ class OnScreenKeyboard(
                 listOf(Key.Blank to 1.5f) + "*\"':;!?".map { Key.Text(it.toString()) to 1f } + listOf(Key.Backspace to 1.5f),
             )
         }
+        if (numberRow && !symbols) box.addView(rowOf("1234567890".map { Key.Text(it.toString()) to 1f }))
         for (row in rows) box.addView(rowOf(row))
         box.addView(
             rowOf(
@@ -581,6 +654,7 @@ class OnScreenKeyboard(
         const val KEY_ASPECT = 0.675f
         const val KEY_TEXT_RATIO = 0.4f
         const val KEY_W = "kb_w"
+        const val KEY_NUMBERS = "kb_numbers"
         const val REPEAT_DELAY_MS = 400L
         const val REPEAT_MS = 60L
         const val KEY_X = "kb_x"

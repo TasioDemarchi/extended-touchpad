@@ -161,13 +161,14 @@ class TouchpadService : AccessibilityService() {
         } else {
             registerReceiver(screenReceiver, screenFilter)
         }
-        keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance) { externalDisplayId() }
+        keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance, { panel.bounds() }) { externalDisplayId() }
         keyboard.onVisibilityChanged = {
             // Tras cerrar el teclado no se reabre solo al instante (el teclado del TV puede seguir en pantalla).
             if (!keyboard.isShown) suppressAutoOpenUntil = SystemClock.uptimeMillis() + AUTO_OPEN_PAUSE_MS
             KeyboardTileService.requestRefresh(this)
         }
         panel = TouchpadPanel(this, settings, appearance, panelListener)
+        panel.onSettled = { keyboard.avoidPanel() }
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
@@ -296,7 +297,8 @@ class TouchpadService : AccessibilityService() {
             cursor.detach()
         } else {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
-            panel.show()
+            // Si el panel aparece con el teclado ya abierto (se activó el touchpad), el teclado se aparta.
+            if (panel.show() && keyboard.isShown) keyboard.avoidPanel()
         }
         // El teclado se mantiene con el touchpad desactivado; solo se cierra sin pantalla externa o con bloqueo.
         if (external == null || locked) keyboard.hide() else keyboard.relayout()
