@@ -50,6 +50,10 @@ class OnScreenKeyboard(
     private var passwordNode: AccessibilityNodeInfo? = null
     private val passwordBuffer = StringBuilder()
 
+    // Campo al que se acaba de dar Enter: su contenido pasa a ser otra cosa (p. ej. la URL de los
+    // resultados de una búsqueda). La vista previa se limpia y la siguiente tecla de texto empieza de cero.
+    private var sentNode: AccessibilityNodeInfo? = null
+
     val isShown get() = root != null
 
     fun toggle() = if (isShown) hide() else show()
@@ -149,6 +153,7 @@ class OnScreenKeyboard(
         preview = null
         passwordNode = null
         passwordBuffer.clear()
+        sentNode = null
         restoreSystemKeyboard()
     }
 
@@ -281,14 +286,14 @@ class OnScreenKeyboard(
     private fun press(key: Key) {
         when (key) {
             is Key.Text -> {
-                edit { text, start, end -> Edit(text.replaceRange(start, end, key.value), start + key.value.length) }
+                edit(startFresh = true) { text, start, end -> Edit(text.replaceRange(start, end, key.value), start + key.value.length) }
                 if (shift == Shift.ONCE && key.value.firstOrNull()?.isLetter() == true) {
                     shift = Shift.OFF
                     buildKeys()
                 }
             }
 
-            Key.Backspace -> edit { text, start, end ->
+            Key.Backspace -> edit(startFresh = false) { text, start, end ->
                 when {
                     start != end -> Edit(text.removeRange(start, end), start)
                     start > 0 -> Edit(text.removeRange(start - 1, start), start - 1)
@@ -298,7 +303,13 @@ class OnScreenKeyboard(
 
             Key.Enter -> {
                 val node = remote.focusedInput(externalDisplayId())
-                if (node == null) showMessage("No hay un campo de texto enfocado en el TV") else if (!remote.enter(node)) {
+                if (node == null) {
+                    showMessage("No hay un campo de texto enfocado en el TV")
+                } else if (remote.enter(node)) {
+                    sentNode = node
+                    passwordBuffer.clear()
+                    showText("", false)
+                } else {
                     ProbeLog.add("Teclado: ${remote.lastDiagnosis}")
                 }
             }
@@ -324,14 +335,17 @@ class OnScreenKeyboard(
     private data class Edit(val text: String, val caret: Int)
 
     /** Lee el texto actual del campo del TV, le aplica [change] y lo escribe de vuelta. */
-    private fun edit(change: (text: String, start: Int, end: Int) -> Edit) {
+    private fun edit(startFresh: Boolean, change: (text: String, start: Int, end: Int) -> Edit) {
         val node = remote.focusedInput(externalDisplayId())
         if (node == null) {
             ProbeLog.add("Teclado: ${remote.lastDiagnosis}")
             showMessage("No hay un campo de texto enfocado en el TV")
             return
         }
-        val text: String
+        // Tras un Enter, escribir empieza un texto nuevo; borrar sigue operando sobre el contenido real.
+        val afterEnter = sentNode != null && sentNode == node
+        sentNode = null
+        var text: String
         var start: Int
         var end: Int
         if (node.isPassword) {
@@ -349,6 +363,11 @@ class OnScreenKeyboard(
             end = node.textSelectionEnd.let { if (it < 0) text.length else it.coerceAtMost(text.length) }
         }
         if (start > end) start = end.also { end = start }
+        if (afterEnter && startFresh) {
+            text = ""
+            start = 0
+            end = 0
+        }
 
         val result = change(text, start, end)
         if (node.isPassword) {
@@ -369,6 +388,8 @@ class OnScreenKeyboard(
         val node = remote.focusedInput(externalDisplayId())
         if (node == null) {
             showMessage("Toca un campo de texto en el TV")
+        } else if (sentNode != null && sentNode == node) {
+            showText("", false)
         } else {
             showText(if (node.isPassword) passwordBuffer.takeIf { passwordNode == node }?.toString().orEmpty() else remote.read(node), node.isPassword)
         }

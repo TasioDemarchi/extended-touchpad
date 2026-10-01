@@ -27,6 +27,12 @@ Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, E
 
 Constantes de sensibilidad: `MOVE_SCALE` y `SCROLL_GAIN` en `TouchpadService.kt`, `MAX_ACCEL` en `TouchpadPanel.kt`, tiempos del scroll en `GestureInjector.kt`.
 
+## Bloqueo de pantalla
+
+Los overlays de accesibilidad se dibujan sobre la pantalla de bloqueo, así que con la tablet bloqueada o con la pantalla apagada se ocultan el panel, el teclado y el cursor del TV, y vuelven al desbloquear. El estado se consulta a `KeyguardManager` (con comprobación periódica mientras está bloqueada), porque `ACTION_USER_PRESENT` no llega en todos los dispositivos (no llega en la Legion Tab 5).
+
+Tras un Enter en el teclado, la vista previa se vacía y la siguiente letra empieza un texto nuevo en ese campo (borrar sigue operando sobre el contenido real).
+
 ## Limitaciones conocidas
 
 - Fuera de alcance por ahora: lanzador de apps propio, clic derecho y teclas de navegación.

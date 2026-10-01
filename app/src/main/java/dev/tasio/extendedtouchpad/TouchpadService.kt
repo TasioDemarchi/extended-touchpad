@@ -1,8 +1,13 @@
 package dev.tasio.extendedtouchpad
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -16,6 +21,40 @@ class TouchpadService : AccessibilityService() {
     private var dragging = false
     private lateinit var keyboard: OnScreenKeyboard
     private lateinit var remoteInput: RemoteInput
+    private lateinit var keyguard: KeyguardManager
+
+    // true desde que la pantalla se apaga hasta poco después de encenderla: así no se muestra nada en el
+    // hueco en que el keyguard aún no se ha confirmado. El resto del tiempo manda KeyguardManager.
+    private var screenOff = false
+
+    private val screenOnCheck = Runnable {
+        screenOff = false
+        sync()
+    }
+    private val lockRecheck = Runnable { sync() }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            ProbeLog.add("Pantalla: ${intent.action?.substringAfterLast('.')} (keyguard=${keyguard.isKeyguardLocked})")
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    main.removeCallbacks(screenOnCheck)
+                    screenOff = true
+                }
+
+                Intent.ACTION_SCREEN_ON -> {
+                    main.removeCallbacks(screenOnCheck)
+                    main.postDelayed(screenOnCheck, SCREEN_ON_CHECK_MS)
+                }
+
+                Intent.ACTION_USER_PRESENT -> {
+                    main.removeCallbacks(screenOnCheck)
+                    screenOff = false
+                }
+            }
+            sync()
+        }
+    }
 
     private val displayListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) = sync()
@@ -67,6 +106,18 @@ class TouchpadService : AccessibilityService() {
         injector = GestureInjector(this, main)
         dragStroke = DragStroke(this, main)
         remoteInput = RemoteInput(this)
+        keyguard = getSystemService(KeyguardManager::class.java)
+        screenOff = false
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(screenReceiver, screenFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenReceiver, screenFilter)
+        }
         keyboard = OnScreenKeyboard(this, remoteInput, getSharedPreferences(PREFS, MODE_PRIVATE)) { cursor.displayId }
         panel = TouchpadPanel(this, getSharedPreferences(PREFS, MODE_PRIVATE), panelListener)
         Displays.manager(this).registerDisplayListener(displayListener, main)
@@ -76,6 +127,9 @@ class TouchpadService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         Displays.manager(this).unregisterDisplayListener(displayListener)
+        unregisterReceiver(screenReceiver)
+        main.removeCallbacks(screenOnCheck)
+        main.removeCallbacks(lockRecheck)
         keyboard.hide()
         panel.hide()
         cursor.detach()
@@ -89,7 +143,7 @@ class TouchpadService : AccessibilityService() {
         val type = event.eventType
         if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED && type != AccessibilityEvent.TYPE_VIEW_CLICKED) return
         // Ignora los eventos de este paquete (el teclado propio y el panel).
-        if (event.packageName?.toString() == packageName || !cursor.isAttached) return
+        if (event.packageName?.toString() == packageName || !cursor.isAttached || isLocked()) return
         val onExternalField = remoteInput.remember(event.source, cursor.displayId)
         if (onExternalField && isTouchpadEnabled && isAutoOpenKeyboard && !keyboard.isShown) keyboard.show()
         keyboard.onRemoteFocusChanged()
@@ -117,8 +171,16 @@ class TouchpadService : AccessibilityService() {
     /** Hace que cursor y panel reflejen: ¿hay display externo? ¿está activado el touchpad? */
     private fun sync() {
         val external = Displays.external(this)
-        if (external == null || !isTouchpadEnabled) {
-            if (panel.isShown || cursor.isAttached) ProbeLog.add("Touchpad oculto (${if (external == null) "sin display externo" else "desactivado"})")
+        val locked = isLocked()
+        if (external == null || !isTouchpadEnabled || locked) {
+            if (panel.isShown || cursor.isAttached) {
+                val reason = when {
+                    locked -> "pantalla bloqueada"
+                    external == null -> "sin display externo"
+                    else -> "desactivado"
+                }
+                ProbeLog.add("Touchpad oculto ($reason)")
+            }
             endDrag()
             keyboard.hide()
             panel.hide()
@@ -127,8 +189,15 @@ class TouchpadService : AccessibilityService() {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
             panel.show()
         }
+        // USER_PRESENT no llega en todos los dispositivos: con la pantalla encendida y bloqueada se
+        // vuelve a comprobar hasta que el sistema indique que ya no hay bloqueo.
+        main.removeCallbacks(lockRecheck)
+        if (locked && !screenOff) main.postDelayed(lockRecheck, LOCK_RECHECK_MS)
         ProbeLog.onChange?.invoke()
     }
+
+    /** Los overlays de accesibilidad se dibujan sobre la pantalla de bloqueo: con ella activa no se muestra nada. */
+    private fun isLocked() = screenOff || keyguard.isKeyguardLocked
 
     private fun endDrag() {
         if (!dragging) return
@@ -151,6 +220,8 @@ class TouchpadService : AccessibilityService() {
 
     companion object {
         private const val PREFS = "touchpad"
+        private const val SCREEN_ON_CHECK_MS = 300L
+        private const val LOCK_RECHECK_MS = 500L
         private const val KEY_ENABLED = "enabled"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard"
 
