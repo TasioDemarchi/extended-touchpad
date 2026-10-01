@@ -24,46 +24,52 @@ class AudioOutputSwitcher(
     private class Dialog(val current: Row, val others: List<Row>, val done: AccessibilityNodeInfo?)
 
     private var busy = false
+    private val freeze = ScreenFreeze(service, handler)
 
     fun cycle() {
         if (busy) return
         busy = true
         val before = AudioOutputs.current(service)
         ProbeLog.add("Audio: abriendo el selector del sistema (actual: ${AudioOutputs.displayName(before)})")
-        openSystemDialog(service)
-        poll(attempts = 30, delayMs = 100, probe = ::findDialog) { dialog ->
-            if (dialog == null) {
-                finish("No se pudo abrir el selector de audio")
-                return@poll
-            }
-            val target = nextTarget(dialog)
-            if (target == null) {
-                ProbeLog.add("Audio: no hay otro dispositivo (${dialog.current.name})")
-                close(dialog)
-                finish("No hay otro dispositivo de salida")
-                return@poll
-            }
-            ProbeLog.add("Audio: ${dialog.current.name} -> ${target.name}")
-            target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            // El sistema tarda un instante en aplicar el cambio; se cierra el diálogo y se espera a ver el nuevo dispositivo.
-            handler.postDelayed({
-                close(dialog)
-                poll(attempts = 15, delayMs = 120, probe = {
-                    AudioOutputs.current(service)?.takeIf { it.id != before?.id }
-                }) { changed ->
-                    val now = changed ?: AudioOutputs.current(service)
-                    if (changed != null) {
-                        finish("Audio: ${AudioOutputs.displayName(now)}")
-                    } else {
-                        ProbeLog.add("Audio: el sistema no cambió el dispositivo")
-                        finish("No se pudo cambiar el audio")
-                    }
-                }
-            }, APPLY_DELAY_MS)
+        // La pantalla se congela con una captura mientras el selector del sistema trabaja por debajo, para que no se vea.
+        freeze.show {
+            openSystemDialog(service)
+            poll(attempts = POLL_ATTEMPTS, delayMs = POLL_MS, probe = ::findDialog) { dialog -> onDialog(dialog, before) }
         }
     }
 
+    private fun onDialog(dialog: Dialog?, before: android.media.AudioDeviceInfo?) {
+        if (dialog == null) {
+            finish("No se pudo abrir el selector de audio")
+            return
+        }
+        val target = nextTarget(dialog)
+        if (target == null) {
+            ProbeLog.add("Audio: no hay otro dispositivo (${dialog.current.name})")
+            close(dialog)
+            finish("No hay otro dispositivo de salida")
+            return
+        }
+        ProbeLog.add("Audio: ${dialog.current.name} -> ${target.name}")
+        target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        // El sistema tarda un instante en aplicar el cambio; se cierra el diálogo y se espera a ver el nuevo dispositivo.
+        handler.postDelayed({
+            close(dialog)
+            poll(attempts = 15, delayMs = 100, probe = {
+                AudioOutputs.current(service)?.takeIf { it.id != before?.id }
+            }) { changed ->
+                if (changed != null) {
+                    finish("Audio: ${AudioOutputs.displayName(changed)}")
+                } else {
+                    ProbeLog.add("Audio: el sistema no cambió el dispositivo")
+                    finish("No se pudo cambiar el audio")
+                }
+            }
+        }, APPLY_DELAY_MS)
+    }
+
     private fun finish(message: String) {
+        freeze.hide()
         ProbeLog.add("Audio: resultado «$message» (ahora: ${AudioOutputs.displayName(AudioOutputs.current(service))})")
         Toast.makeText(service, message, Toast.LENGTH_SHORT).show()
         AudioOutputTileService.requestRefresh(service)
@@ -166,7 +172,9 @@ class AudioOutputSwitcher(
     companion object {
         private const val SYSTEM_UI = "com.android.systemui"
         private const val ACTION_OUTPUT_DIALOG = "com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG"
-        private const val APPLY_DELAY_MS = 600L
+        private const val APPLY_DELAY_MS = 300L
+        private const val POLL_MS = 40L
+        private const val POLL_ATTEMPTS = 75
         private const val PREFS = "touchpad"
         private const val KEY_ORDER = "audio_order"
         private const val SEPARATOR = "\u0001"
