@@ -54,6 +54,7 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         ui = Ui(this)
         appearance = Appearance(getSharedPreferences("touchpad", MODE_PRIVATE))
+        appearance.refreshSystemAccent(this)
 
         val content = ui.vertical().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)) }
         val scroll = ScrollView(this).apply {
@@ -121,6 +122,7 @@ class SettingsActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // El servicio puede haberse activado en Ajustes, y la transparencia también se cambia desde los paneles.
+        appearance.refreshSystemAccent(this)
         TouchpadService.instance?.refreshOverlayLayer() // por si se concedió el permiso «Mostrar sobre otras apps»
         refreshDynamic()
         renderAppearance()
@@ -509,7 +511,25 @@ class SettingsActivity : Activity() {
             addView(ui.cardTitle("Tema y color de los paneles"))
             addView(themeSegments(), ui.params(ui.match, ui.wrap, top = 16))
             addView(ui.text("Color de acento", 15f), ui.params(ui.match, ui.wrap, top = 20))
-            addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); renderAppearance() }, ui.params(ui.match, ui.wrap, top = 8))
+            addView(
+                ui.switchRow(
+                    "Usar el color de la tablet",
+                    "Sigue el color de acento del sistema (Material You) y se actualiza solo si cambia.",
+                    appearance.useSystemAccent,
+                ) { appearance.setUseSystemAccent(it); renderAppearance() },
+                ui.params(ui.match, ui.wrap, top = 10),
+            )
+            if (appearance.useSystemAccent) {
+                addView(
+                    ui.horizontal().apply {
+                        addView(swatches(listOf(appearance.accent), appearance.accent) { })
+                        addView(ui.text("Color actual de la tablet", 13f, Palette.TEXT2))
+                    },
+                    ui.params(ui.match, ui.wrap, top = 8),
+                )
+            } else {
+                addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); renderAppearance() }, ui.params(ui.match, ui.wrap, top = 8))
+            }
         }, gap())
 
         appearanceHolder.addView(ui.card().apply {
@@ -550,7 +570,12 @@ class SettingsActivity : Activity() {
         addView(segment("Oscuro", appearance.dark) { appearance.setDark(true); renderAppearance() }, ui.params(0, ui.wrap, weight = 1f))
     }
 
-    private fun swatches(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.horizontal().apply {
+    /** Muestras de color en filas de 6, para que no se salgan de la tarjeta. */
+    private fun swatches(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.vertical().apply {
+        for (chunk in colors.chunked(SWATCHES_PER_ROW)) addView(swatchRow(chunk, selected, onPick))
+    }
+
+    private fun swatchRow(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.horizontal().apply {
         for (color in colors) {
             val isSelected = color == selected
             val swatch = View(this@SettingsActivity).apply {
@@ -616,5 +641,9 @@ class SettingsActivity : Activity() {
             CursorGlyph.draw(canvas, side, d, shape, color, outline)
             canvas.restore()
         }
+    }
+
+    private companion object {
+        const val SWATCHES_PER_ROW = 6
     }
 }

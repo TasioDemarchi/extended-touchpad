@@ -71,6 +71,10 @@ Por defecto los paneles son overlays de accesibilidad, que Android dibuja por en
 - Al conceder o retirar el permiso, o cambiar el interruptor, los paneles se reconstruyen solos.
 - Implementación en `OverlayLayer.kt`. Un contexto de ventana de tipo overlay solo se puede crear a partir de un contexto asociado a una pantalla: `service.createDisplayContext(display).createWindowContext(type, null)`; pedírselo directamente al servicio lanza `UnsupportedOperationException` y tumba el servicio al conectarse.
 
+## Color de acento
+
+12 colores a elegir (azul, cian, verde azulado, verde, lima, amarillo, naranja, rojo, rosa, violeta, índigo y gris azulado), o el interruptor **Usar el color de la tablet**, que sigue el color de acento del sistema (paleta dinámica *Material You*, `android.R.color.system_accent1_500`, Android 12+). Se vuelve a leer al abrir la app y al encender o desbloquear la tablet, y los paneles se reconstruyen solos si cambia. El acento se usa en las teclas pulsadas, la tecla de mayúsculas activa, el icono de teclado o touchpad activo, el cursor mientras se arrastra y el icono de la pantalla de cambio de audio. Si Lenovo (ZUI) tuviera un color de acento propio distinto del de Android, este ajuste sigue el de Android.
+
 ## Imán entre paneles
 
 Con el interruptor **Imantar los paneles** de la app (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:

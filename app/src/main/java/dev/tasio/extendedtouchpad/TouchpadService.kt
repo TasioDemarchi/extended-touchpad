@@ -61,6 +61,8 @@ class TouchpadService : AccessibilityService() {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            // El color de la tablet puede haber cambiado (fondo de pantalla, tema): se relee al encender o desbloquear.
+            appearance.refreshSystemAccent(this@TouchpadService)
             ProbeLog.add("Pantalla: ${intent.action?.substringAfterLast('.')} (keyguard=${keyguard.isKeyguardLocked})")
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
@@ -90,7 +92,8 @@ class TouchpadService : AccessibilityService() {
             OverlayLayer.KEY_PREFERRED -> main.post { refreshOverlayLayer() }
             Appearance.KEY_PAD_OPACITY -> panel.applyAlpha()
             Appearance.KEY_KB_OPACITY -> keyboard.applyAlpha()
-            Appearance.KEY_DARK, Appearance.KEY_ACCENT, Appearance.KEY_CURSOR_DP, Appearance.KEY_CURSOR_COLOR,
+            Appearance.KEY_DARK, Appearance.KEY_ACCENT, Appearance.KEY_ACCENT_SYSTEM, Appearance.KEY_SYSTEM_ACCENT_COLOR,
+            Appearance.KEY_CURSOR_DP, Appearance.KEY_CURSOR_COLOR,
             Appearance.KEY_CURSOR_SHAPE,
             -> {
                 main.removeCallbacks(rebuild)
@@ -160,6 +163,7 @@ class TouchpadService : AccessibilityService() {
         instance = this
         settings = getSharedPreferences(PREFS, MODE_PRIVATE)
         appearance = Appearance(settings)
+        appearance.refreshSystemAccent(this)
         settings.registerOnSharedPreferenceChangeListener(settingsListener)
         cursor = ExternalCursor(this, appearance)
         injector = GestureInjector(this, main)
