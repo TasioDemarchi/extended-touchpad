@@ -48,7 +48,8 @@ class StatusActivity : Activity() {
         click(R.id.btn_settings) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         click(R.id.btn_toggle) { withService { it.setEnabled(!it.isTouchpadEnabled) } }
         click(R.id.btn_auto_keyboard) { withService { it.toggleAutoOpenKeyboard(); refresh() } }
-        click(R.id.btn_add_tile) { requestAddTile() }
+        click(R.id.btn_add_tile) { requestAddTile(TouchpadTileService::class.java, "Touchpad", R.drawable.ic_touchpad_tile) }
+        click(R.id.btn_add_keyboard_tile) { requestAddTile(KeyboardTileService::class.java, "Teclado", R.drawable.ic_keyboard_tile) }
         click(R.id.btn_appearance) { startActivity(Intent(this, SettingsActivity::class.java)) }
         click(R.id.btn_test_tap) { withService { it.testTapCenter() } }
     }
@@ -66,23 +67,23 @@ class StatusActivity : Activity() {
         super.onStop()
     }
 
-    /** Pide a Android (13+) agregar el mosaico "Touchpad" al centro de control. */
-    private fun requestAddTile() {
+    /** Pide a Android (13+) agregar un mosaico al centro de control. */
+    private fun requestAddTile(service: Class<*>, label: String, iconRes: Int) {
         if (Build.VERSION.SDK_INT < 33) {
-            ProbeLog.add("Agrega el mosaico a mano: edita el centro de control y busca \"Touchpad\"")
+            ProbeLog.add("Agrega el mosaico a mano: edita el centro de control y busca \"$label\"")
             return
         }
         getSystemService(StatusBarManager::class.java).requestAddTileService(
-            ComponentName(this, TouchpadTileService::class.java),
-            "Touchpad",
-            Icon.createWithResource(this, R.drawable.ic_touchpad_tile),
+            ComponentName(this, service),
+            label,
+            Icon.createWithResource(this, iconRes),
             mainExecutor,
         ) { result ->
             ProbeLog.add(
                 when (result) {
-                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "Mosaico agregado al centro de control"
-                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "El mosaico ya estaba en el centro de control"
-                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "No se agregó el mosaico"
+                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "Mosaico \"$label\" agregado al centro de control"
+                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "El mosaico \"$label\" ya estaba en el centro de control"
+                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "No se agregó el mosaico \"$label\""
                     else -> "Resultado al agregar el mosaico: $result"
                 },
             )

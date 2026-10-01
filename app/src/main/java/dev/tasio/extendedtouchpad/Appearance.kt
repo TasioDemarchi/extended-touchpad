@@ -68,9 +68,6 @@ class Appearance(private val prefs: SharedPreferences) {
         const val MAX_CURSOR_DP = 64
         const val DEFAULT_CURSOR_DP = 28
 
-        /** Niveles del botón de transparencia rápida: cada toque baja al siguiente y, tras el último, vuelve a 100. */
-        val OPACITY_LEVELS = listOf(100, 75, 50, 30)
-
         val ACCENTS = listOf(
             Color.rgb(30, 136, 229), // azul
             Color.rgb(67, 160, 71), // verde
@@ -87,9 +84,6 @@ class Appearance(private val prefs: SharedPreferences) {
             Color.rgb(102, 187, 106), // verde
             Color.rgb(18, 35, 58), // azul marino
         )
-
-        /** Siguiente nivel de opacidad más bajo que [current]; si no hay, vuelve a 100. */
-        fun nextOpacity(current: Int): Int = OPACITY_LEVELS.firstOrNull { it < current - 2 } ?: 100
 
         private fun blend(a: Int, b: Int, t: Float): Int = Color.rgb(
             (Color.red(a) * t + Color.red(b) * (1 - t)).toInt(),

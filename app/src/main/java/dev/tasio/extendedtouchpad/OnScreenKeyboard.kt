@@ -44,7 +44,10 @@ class OnScreenKeyboard(
     private var keysBox: LinearLayout? = null
     private var preview: TextView? = null
     private var card: LinearLayout? = null
-    private var bar: View? = null
+    private var bar: View? = null // contenedor de la barra superior (barra normal + barra de transparencia)
+    private var normalBar: View? = null
+    private var opacitySlider: View? = null
+    private val closeSlider = Runnable { hideOpacitySlider() }
     private var footer: View? = null
     private var widthPx = 0
 
@@ -60,6 +63,9 @@ class OnScreenKeyboard(
     private var sentNode: AccessibilityNodeInfo? = null
 
     val isShown get() = root != null
+
+    /** Se invoca al abrirse o cerrarse el teclado (para actualizar el mosaico del centro de control). */
+    var onVisibilityChanged: (() -> Unit)? = null
 
     fun toggle() = if (isShown) hide() else show()
 
@@ -80,7 +86,7 @@ class OnScreenKeyboard(
             setPadding(dp(12), 0, dp(8), 0)
         }
         val opacityBtn = OpacityIconView(ctx, appearance).apply {
-            setOnClickListener { appearance.keyboardOpacity = Appearance.nextOpacity(appearance.keyboardOpacity) }
+            setOnClickListener { showOpacitySlider() }
         }
         val closeBtn = TextView(ctx).apply {
             text = "✕"
@@ -97,6 +103,18 @@ class OnScreenKeyboard(
             addView(closeBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
         }
         installDrag(title)
+        val slider = OpacitySliderView(
+            ctx, appearance,
+            getValue = { appearance.keyboardOpacity },
+            setValue = { appearance.keyboardOpacity = it },
+            onClose = { hideOpacitySlider() },
+            onTouchStart = { main.removeCallbacks(closeSlider) },
+            onTouchEnd = { scheduleSliderClose() },
+        ).apply { visibility = View.GONE }
+        val barHolder = FrameLayout(ctx).apply {
+            addView(bar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(slider, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
 
         val keys = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -116,7 +134,7 @@ class OnScreenKeyboard(
             }
             clipToOutline = true
             elevation = dp(8).toFloat()
-            addView(bar, LinearLayout.LayoutParams(width, dp(BAR_DP)))
+            addView(barHolder, LinearLayout.LayoutParams(width, dp(BAR_DP)))
             addView(keys, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(grip, LinearLayout.LayoutParams(width, dp(FOOTER_DP)))
         }
@@ -153,7 +171,9 @@ class OnScreenKeyboard(
         keysBox = keys
         preview = title
         card = cardView
-        this.bar = bar
+        this.bar = barHolder
+        normalBar = bar
+        opacitySlider = slider
         footer = grip
         shift = Shift.OFF
         symbols = false
@@ -161,6 +181,7 @@ class OnScreenKeyboard(
         refreshPreview()
         clampToScreen()
         hideSystemKeyboard()
+        onVisibilityChanged?.invoke()
     }
 
     /** Aplica la opacidad actual sin reconstruir el teclado. */
@@ -168,7 +189,27 @@ class OnScreenKeyboard(
         root?.alpha = appearance.keyboardOpacity / 100f
     }
 
+    private fun showOpacitySlider() {
+        normalBar?.visibility = View.GONE
+        opacitySlider?.visibility = View.VISIBLE
+        opacitySlider?.invalidate()
+        scheduleSliderClose()
+    }
+
+    private fun hideOpacitySlider() {
+        main.removeCallbacks(closeSlider)
+        opacitySlider?.visibility = View.GONE
+        normalBar?.visibility = View.VISIBLE
+    }
+
+    /** La barra de transparencia se cierra sola tras unos segundos sin tocarla. */
+    private fun scheduleSliderClose() {
+        main.removeCallbacks(closeSlider)
+        main.postDelayed(closeSlider, SLIDER_TIMEOUT_MS)
+    }
+
     fun hide() {
+        main.removeCallbacks(closeSlider)
         val r = root ?: return
         try {
             wm.removeView(r)
@@ -180,11 +221,14 @@ class OnScreenKeyboard(
         preview = null
         card = null
         bar = null
+        normalBar = null
+        opacitySlider = null
         footer = null
         passwordNode = null
         passwordBuffer.clear()
         sentNode = null
         restoreSystemKeyboard()
+        onVisibilityChanged?.invoke()
     }
 
     // ---------------------------------------------------------------- tamaño
@@ -531,6 +575,7 @@ class OnScreenKeyboard(
         const val MARGIN_DP = 10
         const val MAX_WIDTH_DP = 720
         const val BAR_DP = 36
+        const val SLIDER_TIMEOUT_MS = 3000L
         const val FOOTER_DP = 22
         const val MIN_WIDTH_DP = 300
         const val KEY_ASPECT = 0.675f

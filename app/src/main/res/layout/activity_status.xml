@@ -38,7 +38,13 @@
             android:id="@+id/btn_add_tile"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Agregar atajo al centro de control" />
+            android:text="Agregar atajo del touchpad al centro de control" />
+
+        <Button
+            android:id="@+id/btn_add_keyboard_tile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Agregar atajo del teclado al centro de control" />
 
         <Button
             android:id="@+id/btn_appearance"

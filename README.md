@@ -14,17 +14,20 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
 - **Dos dedos en vertical:** scroll (un único trazo continuo en el TV).
 - **Tap y, sin soltar, apoyar de nuevo y mover (dentro de ~300 ms):** arrastre. El cursor se pone azul. Manteniéndolo quieto antes de mover se activa el long-press de la app (por ejemplo, para mover íconos del launcher).
 - **Barra superior del panel**, de izquierda a derecha:
-  - **◐ Transparencia:** cada toque baja la opacidad (100, 75, 50, 30 %) y vuelve a 100 %.
+  - **◐ Transparencia:** la barra se transforma en un deslizador (20–100 %) con el valor en pantalla. Se cierra sola a los 3 s sin tocarla (el contador se detiene mientras la usas) o al tocar el ◐.
   - **Luna / sol:** alterna entre tema claro y oscuro.
   - **Puntos:** arrastrar para mover el panel.
   - **Tuerca:** abre los ajustes de apariencia de la app.
   - **✕:** cierra el panel. Se vuelve a abrir con **Activar touchpad** en la app.
-- **Franja inferior (asa en la esquina):** arrastrar para cambiar el tamaño del panel (ancho y alto). Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
-- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet (se puede desactivar con **Desactivar teclado automático** en la app). No hay un botón para abrirlo a mano.
+- **Franja inferior:** el **icono de teclado** de la izquierda abre y cierra el teclado a mano; el resto de la franja es el asa para cambiar el tamaño del panel (ancho y alto). Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
+- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet, venga el foco del touchpad o de un mouse físico (se puede desactivar con **Desactivar teclado automático** en la app). También se abre a mano con el icono de la franja inferior o con el mosaico **Teclado** del centro de control.
 
-## Atajo en el centro de control
+## Atajos en el centro de control
 
-La app incluye un mosaico de ajustes rápidos, **Touchpad**, que activa y desactiva el touchpad con un toque. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad). Se agrega desde el botón **Agregar atajo al centro de control** de la app (Android 13+) o editando el centro de control. Se mantiene sincronizado con la ✕ del panel y con el botón de la app.
+La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Agregar atajo del touchpad/teclado al centro de control** de la app (Android 13+) o editando el centro de control, y se mantienen sincronizados con el panel y la app:
+
+- **Touchpad:** activa y desactiva el touchpad. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad).
+- **Teclado:** abre y cierra el teclado. Muestra Abierto, Cerrado, Sin pantalla externa o Servicio apagado. No depende del touchpad.
 
 ## Apariencia
 
@@ -34,12 +37,14 @@ Formas de cursor: Clásico, Contorno, Moderno (cuña de dos tonos), Punto y Mira
 
 ## Teclado
 
-Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior, su ◐ cambia la transparencia, la ✕ lo cierra y la franja inferior cambia su tamaño (las teclas crecen con el ancho).
+Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No depende del touchpad: solo necesita una pantalla externa conectada y la tablet desbloqueada. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior, su ◐ cambia la transparencia, la ✕ lo cierra y la franja inferior cambia su tamaño (las teclas crecen con el ancho).
 
 - Requiere el permiso de accesibilidad de **leer el contenido de ventanas** (para encontrar el campo enfocado en el TV).
 - En campos de contraseña Android no entrega el texto real, así que el teclado lleva su propio registro de lo escrito.
 - Sin corrector, dictado ni flechas/Tab. Apps que dibujan su propio campo de texto (algunos juegos) no lo aceptan.
 - Mientras el teclado propio está abierto se oculta el teclado del sistema (`SoftKeyboardController`, `SHOW_MODE_HIDDEN`), también en el TV, y se restaura al cerrarlo. El teclado del TV puede asomar ~0,5 s antes de esconderse, porque la orden llega cuando el TV ya empezó a abrirlo. Con el teclado propio abierto tampoco aparece el teclado del sistema en apps de la tablet.
+
+**Apertura automática.** Se dispara por tres señales: foco o clic en un campo editable del TV, un reintento a los 0,2 s (la lista de ventanas del TV puede ir por detrás del evento) y la aparición de la ventana del teclado del sistema en el TV, que cubre los campos que se enfocan solos (por ejemplo la búsqueda de YouTube). Tras cerrar el teclado hay una pausa de 1,5 s para que no se reabra al instante.
 
 Constantes de sensibilidad: `MOVE_SCALE` y `SCROLL_GAIN` en `TouchpadService.kt`, `MAX_ACCEL` en `TouchpadPanel.kt`, tiempos del scroll en `GestureInjector.kt`.
 

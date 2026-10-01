@@ -39,6 +39,9 @@ class TouchpadPanel(
         fun onDragStart()
         fun onDragEnd()
 
+        /** Abre o cierra el teclado (icono de la franja inferior). */
+        fun onKeyboard()
+
         /** Abre la pantalla de ajustes de la app. */
         fun onSettings()
         fun onClose()
@@ -49,7 +52,11 @@ class TouchpadPanel(
     private var root: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
     private var card: LinearLayout? = null
-    private var handleView: View? = null
+    private var handleView: View? = null // contenedor de la barra superior (barra normal + barra de transparencia)
+    private var handleBar: View? = null
+    private var opacitySlider: View? = null
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val closeSlider = Runnable { hideOpacitySlider() }
     private var padView: View? = null
     private var footerView: View? = null
 
@@ -79,19 +86,29 @@ class TouchpadPanel(
         val handle = HandleView(service, appearance, object : HandleView.Callbacks {
             override fun onDrag(dx: Float, dy: Float) = dragBy(dx, dy)
             override fun onDragEnd() = savePosition()
-            override fun onOpacity() {
-                appearance.padOpacity = Appearance.nextOpacity(appearance.padOpacity)
-            }
+            override fun onOpacity() = showOpacitySlider()
 
             override fun onTheme() = appearance.setDark(!appearance.dark)
             override fun onSettings() = listener.onSettings()
 
             override fun onClose() = listener.onClose()
         })
+        val slider = OpacitySliderView(
+            service, appearance,
+            getValue = { appearance.padOpacity },
+            setValue = { appearance.padOpacity = it },
+            onClose = { hideOpacitySlider() },
+            onTouchStart = { main.removeCallbacks(closeSlider) },
+            onTouchEnd = { scheduleSliderClose() },
+        ).apply { visibility = View.GONE }
+        val handleHolder = FrameLayout(service).apply {
+            addView(handle, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(slider, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
         val footer = ResizeGripView(service, appearance, object : ResizeGripView.Callbacks {
             override fun onResize(dx: Float, dy: Float) = resizeBy(dx, dy)
             override fun onResizeEnd() = saveSize()
-        })
+        }, onKeyboard = { listener.onKeyboard() })
 
         val cardView = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
@@ -101,7 +118,7 @@ class TouchpadPanel(
             }
             clipToOutline = true
             elevation = dp(8).toFloat()
-            addView(handle, LinearLayout.LayoutParams(padWidth, dp(HANDLE_DP)))
+            addView(handleHolder, LinearLayout.LayoutParams(padWidth, dp(HANDLE_DP)))
             addView(pad, LinearLayout.LayoutParams(padWidth, padHeight))
             addView(footer, LinearLayout.LayoutParams(padWidth, dp(FOOTER_DP)))
         }
@@ -135,7 +152,9 @@ class TouchpadPanel(
             root = container
             lp = params
             card = cardView
-            handleView = handle
+            handleView = handleHolder
+            handleBar = handle
+            opacitySlider = slider
             padView = pad
             footerView = footer
         } catch (t: Throwable) {
@@ -148,7 +167,27 @@ class TouchpadPanel(
         root?.alpha = appearance.padOpacity / 100f
     }
 
+    private fun showOpacitySlider() {
+        handleBar?.visibility = View.GONE
+        opacitySlider?.visibility = View.VISIBLE
+        opacitySlider?.invalidate()
+        scheduleSliderClose()
+    }
+
+    private fun hideOpacitySlider() {
+        main.removeCallbacks(closeSlider)
+        opacitySlider?.visibility = View.GONE
+        handleBar?.visibility = View.VISIBLE
+    }
+
+    /** La barra de transparencia se cierra sola tras unos segundos sin tocarla. */
+    private fun scheduleSliderClose() {
+        main.removeCallbacks(closeSlider)
+        main.postDelayed(closeSlider, SLIDER_TIMEOUT_MS)
+    }
+
     fun hide() {
+        main.removeCallbacks(closeSlider)
         val r = root ?: return
         try {
             wm.removeView(r)
@@ -158,6 +197,8 @@ class TouchpadPanel(
         lp = null
         card = null
         handleView = null
+        handleBar = null
+        opacitySlider = null
         padView = null
         footerView = null
     }
@@ -540,8 +581,9 @@ class TouchpadPanel(
 
     private companion object {
         const val MARGIN_DP = 10
+        const val SLIDER_TIMEOUT_MS = 3000L
         const val HANDLE_DP = 36
-        const val FOOTER_DP = 22
+        const val FOOTER_DP = 28
         const val MIN_PAD_DP = 220
         const val MIN_PAD_HEIGHT_DP = 110
         const val PAD_ASPECT = 0.62f

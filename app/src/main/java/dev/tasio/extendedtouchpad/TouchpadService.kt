@@ -9,6 +9,8 @@ import android.content.SharedPreferences
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.SystemClock
+import android.view.accessibility.AccessibilityWindowInfo
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -21,6 +23,10 @@ class TouchpadService : AccessibilityService() {
     private lateinit var dragStroke: DragStroke
     private var dragging = false
     private var hadExternalDisplay = false
+
+    // Teclado del sistema visible en el TV (ventana de tipo teclado) y pausa del auto-abrir tras cerrar el teclado.
+    private var tvImeVisible = false
+    private var suppressAutoOpenUntil = 0L
     private lateinit var keyboard: OnScreenKeyboard
     private lateinit var appearance: Appearance
     private lateinit var settings: SharedPreferences
@@ -85,7 +91,7 @@ class TouchpadService : AccessibilityService() {
         cursor.detach()
         sync()
         if (hadCursor && cursor.isAttached) cursor.restorePosition(cursorX, cursorY)
-        if (keyboardWasShown && cursor.isAttached) keyboard.show()
+        if (keyboardWasShown && isKeyboardAvailable()) keyboard.show()
     }
 
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -125,6 +131,8 @@ class TouchpadService : AccessibilityService() {
 
         override fun onScrollEnd() = injector.endScroll()
 
+        override fun onKeyboard() = toggleKeyboard()
+
         override fun onSettings() {
             startActivity(Intent(this@TouchpadService, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
@@ -153,7 +161,12 @@ class TouchpadService : AccessibilityService() {
         } else {
             registerReceiver(screenReceiver, screenFilter)
         }
-        keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance) { cursor.displayId }
+        keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance) { externalDisplayId() }
+        keyboard.onVisibilityChanged = {
+            // Tras cerrar el teclado no se reabre solo al instante (el teclado del TV puede seguir en pantalla).
+            if (!keyboard.isShown) suppressAutoOpenUntil = SystemClock.uptimeMillis() + AUTO_OPEN_PAUSE_MS
+            KeyboardTileService.requestRefresh(this)
+        }
         panel = TouchpadPanel(this, settings, appearance, panelListener)
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
@@ -179,13 +192,50 @@ class TouchpadService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        val type = event.eventType
-        if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED && type != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> checkTvKeyboard()
+            AccessibilityEvent.TYPE_VIEW_FOCUSED, AccessibilityEvent.TYPE_VIEW_CLICKED -> onFieldEvent(event)
+        }
+    }
+
+    /** Foco o clic en una vista: si es un campo de texto del TV, se recuerda y se abre el teclado. */
+    private fun onFieldEvent(event: AccessibilityEvent) {
         // Ignora los eventos de este paquete (el teclado propio y el panel).
-        if (event.packageName?.toString() == packageName || !cursor.isAttached || isLocked()) return
-        val onExternalField = remoteInput.remember(event.source, cursor.displayId)
-        if (onExternalField && isTouchpadEnabled && isAutoOpenKeyboard && !keyboard.isShown) keyboard.show()
+        if (event.packageName?.toString() == packageName || isLocked()) return
+        // Basta con que haya pantalla externa: el teclado funciona aunque el touchpad esté desactivado.
+        val externalId = Displays.external(this)?.displayId ?: return
+        val source = event.source
+        if (remoteInput.remember(source, externalId)) {
+            openKeyboardAutomatically("foco o clic en un campo del TV")
+        } else if (source != null && source.isEditable) {
+            // La lista de ventanas del TV puede ir un instante por detrás del evento: se reintenta una vez.
+            main.postDelayed({
+                if (remoteInput.remember(source, externalId)) openKeyboardAutomatically("campo del TV (reintento)")
+            }, FIELD_RETRY_MS)
+        }
         keyboard.onRemoteFocusChanged()
+    }
+
+    /** Cambió la lista de ventanas: si apareció el teclado del sistema en el TV, hay un campo esperando texto. */
+    private fun checkTvKeyboard() {
+        val externalId = Displays.external(this)?.displayId
+        if (externalId == null) {
+            tvImeVisible = false
+            return
+        }
+        val visible = windowsOnAllDisplays.get(externalId)?.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } == true
+        val appeared = visible && !tvImeVisible
+        tvImeVisible = visible
+        if (appeared && remoteInput.focusedInput(externalId) != null) {
+            openKeyboardAutomatically("teclado del TV")
+        }
+    }
+
+    private fun openKeyboardAutomatically(reason: String) {
+        if (!isAutoOpenKeyboard || keyboard.isShown || isLocked()) return
+        if (SystemClock.uptimeMillis() < suppressAutoOpenUntil) return
+        ProbeLog.add("Teclado abierto automáticamente ($reason)")
+        keyboard.show()
     }
 
     override fun onInterrupt() = Unit
@@ -193,6 +243,22 @@ class TouchpadService : AccessibilityService() {
     var isTouchpadEnabled: Boolean
         get() = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_ENABLED, true)
         private set(value) = getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, value).apply()
+
+    val isKeyboardShown: Boolean get() = keyboard.isShown
+
+    /** Abre o cierra el teclado a mano (icono del panel y mosaico del centro de control). */
+    fun toggleKeyboard() {
+        if (!isKeyboardAvailable()) {
+            ProbeLog.add("Teclado: no hay pantalla externa conectada o la tablet está bloqueada")
+            return
+        }
+        keyboard.toggle()
+    }
+
+    /** El teclado solo necesita una pantalla externa y la tablet desbloqueada; no depende del touchpad. */
+    fun isKeyboardAvailable() = Displays.external(this) != null && !isLocked()
+
+    private fun externalDisplayId() = Displays.external(this)?.displayId ?: -1
 
     var isAutoOpenKeyboard: Boolean
         get() = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_KEYBOARD, true)
@@ -226,14 +292,14 @@ class TouchpadService : AccessibilityService() {
                 ProbeLog.add("Touchpad oculto ($reason)")
             }
             endDrag()
-            keyboard.hide()
             panel.hide()
             cursor.detach()
         } else {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
             panel.show()
-            keyboard.relayout()
         }
+        // El teclado se mantiene con el touchpad desactivado; solo se cierra sin pantalla externa o con bloqueo.
+        if (external == null || locked) keyboard.hide() else keyboard.relayout()
         // USER_PRESENT no llega en todos los dispositivos: con la pantalla encendida y bloqueada se
         // vuelve a comprobar hasta que el sistema indique que ya no hay bloqueo.
         main.removeCallbacks(lockRecheck)
@@ -268,6 +334,8 @@ class TouchpadService : AccessibilityService() {
         private const val SCREEN_ON_CHECK_MS = 300L
         private const val LOCK_RECHECK_MS = 500L
         private const val REBUILD_DELAY_MS = 150L
+        private const val FIELD_RETRY_MS = 200L
+        private const val AUTO_OPEN_PAUSE_MS = 1500L
         private const val KEY_ENABLED = "enabled"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard"
 
