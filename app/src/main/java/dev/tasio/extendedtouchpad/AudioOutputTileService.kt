@@ -56,7 +56,7 @@ class AudioOutputTileService : TileService() {
         ProbeLog.add("Mosaico Audio: dispositivo=${AudioOutputs.displayName(device)} tipo=${device?.type} inalámbrico=${AudioOutputs.isWireless(device)}")
         tile.label = "Audio"
         tile.subtitle = AudioOutputs.displayName(device)
-        tile.icon = Icon.createWithResource(this, AudioOutputs.iconRes(device))
+        tile.icon = Icon.createWithResource(this, R.drawable.ic_audio_output)
         tile.state = Tile.STATE_ACTIVE
         tile.updateTile()
     }

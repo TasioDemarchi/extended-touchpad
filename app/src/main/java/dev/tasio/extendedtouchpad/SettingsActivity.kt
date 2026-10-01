@@ -429,7 +429,7 @@ class SettingsActivity : Activity() {
             addView(ui.primaryButton("Agregar Teclado") { requestAddTile(KeyboardTileService::class.java, "Teclado", R.drawable.ic_keyboard_tile) }, ui.params(0, ui.wrap, weight = 1f, start = 6))
         }, ui.params(ui.match, ui.wrap, top = 20))
         addView(
-            ui.primaryButton("Agregar Audio") { requestAddTile(AudioOutputTileService::class.java, "Audio", R.drawable.ic_audio_wired) },
+            ui.primaryButton("Agregar Audio") { requestAddTile(AudioOutputTileService::class.java, "Audio", R.drawable.ic_audio_output) },
             ui.params(ui.match, ui.wrap, top = 12),
         )
     }
@@ -455,7 +455,7 @@ class SettingsActivity : Activity() {
         }
         addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 6))
         addView(tile(R.drawable.ic_keyboard_tile, "Teclado", "Cerrado", false), ui.params(0, ui.wrap, weight = 1f, start = 6, end = 6))
-        addView(tile(R.drawable.ic_audio_wired, "Audio", "Parlante interno", false), ui.params(0, ui.wrap, weight = 1f, start = 6))
+        addView(tile(R.drawable.ic_audio_output, "Audio", "Parlante interno", false), ui.params(0, ui.wrap, weight = 1f, start = 6))
     }
 
     /** Pide a Android (13+) agregar un mosaico al centro de control. */

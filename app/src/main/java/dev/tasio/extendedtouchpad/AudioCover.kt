@@ -103,6 +103,8 @@ class AudioCover(
         }
         icon?.apply {
             setImageResource(iconRes)
+            // El color de acento elegido en los ajustes.
+            setColorFilter(Appearance(service.getSharedPreferences("touchpad", android.content.Context.MODE_PRIVATE)).accent)
             visibility = View.VISIBLE
         }
         title?.apply {
@@ -140,6 +142,6 @@ class AudioCover(
         const val DRAW_MS = 60L
 
         /** Cuánto se queda visible el nombre del dispositivo nuevo, para poder leerlo. */
-        const val HOLD_MS = 1800L
+        const val HOLD_MS = 1400L
     }
 }
