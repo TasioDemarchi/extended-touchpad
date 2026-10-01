@@ -47,7 +47,7 @@ class TouchpadPanel(
         fun onClose()
     }
 
-    private val wm = service.getSystemService(WindowManager::class.java)
+    private var wm: WindowManager = service.getSystemService(WindowManager::class.java)
     private val density = service.resources.displayMetrics.density
     private var root: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
@@ -128,6 +128,9 @@ class TouchpadPanel(
             relayout()
             return false
         }
+        // Capa de la ventana: por debajo del centro de control si hay permiso; si no, la de accesibilidad.
+        val windowType = OverlayLayer.panelType(service)
+        wm = OverlayLayer.windowManager(service, windowType)
         val margin = dp(MARGIN_DP)
         loadSize()
 
@@ -188,7 +191,7 @@ class TouchpadPanel(
         val h = totalHeight() + 2 * margin
         val params = WindowManager.LayoutParams(
             w, h,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            windowType,
             // Sin FLAG_NOT_TOUCHABLE: el panel recibe toques; la ventana mide solo lo que ocupa el panel,
             // así que todo lo de fuera sigue llegando a la app de debajo.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -204,7 +207,7 @@ class TouchpadPanel(
         }
         clamp(params, bounds.width(), bounds.height())
         try {
-            wm.addView(container, params)
+            wm = OverlayLayer.addWithFallback(service, container, params, wm)
             root = container
             lp = params
             card = cardView

@@ -43,6 +43,14 @@ Reiniciar el servidor de ADB y esperar a la tablet evita el fallo habitual de `n
 
 Con el permiso concedido (la tarjeta pasa a «Permiso concedido» y muestra un interruptor), el servicio se reactiva al **abrir la app**, al **desplegar el centro de control** con un mosaico agregado y al **encender la tablet**. Tras una detención forzada la app no puede ejecutar nada por sí sola hasta una de esas acciones. Sin el permiso la función no hace nada.
 
+## Paneles por debajo del centro de control
+
+Por defecto los paneles son overlays de accesibilidad, que Android dibuja por encima de todo, también del centro de control y de las notificaciones. Con el permiso **«Mostrar sobre otras apps»** (`SYSTEM_ALERT_WINDOW`, se concede desde Ajustes, sin ADB) y el interruptor **Paneles por debajo del centro de control** (activado por defecto) de la app, el panel del touchpad y el teclado usan `TYPE_APPLICATION_OVERLAY`, que Android coloca **por debajo** de la barra de estado, las notificaciones y el centro de control, y que se oculta con la pantalla de bloqueo. El cursor del display externo no cambia (sigue siendo overlay de accesibilidad: el centro de control es de la tablet y no lo tapa).
+
+- Sin el permiso, con el interruptor apagado o si algo falla al crear la ventana, se usa la capa de accesibilidad de siempre (queda anotado en el registro): nunca se pierde el panel.
+- Al conceder o retirar el permiso, o cambiar el interruptor, los paneles se reconstruyen solos.
+- Implementación en `OverlayLayer.kt`. Un contexto de ventana de tipo overlay solo se puede crear a partir de un contexto asociado a una pantalla: `service.createDisplayContext(display).createWindowContext(type, null)`; pedírselo directamente al servicio lanza `UnsupportedOperationException` y tumba el servicio al conectarse.
+
 ## Imán entre paneles
 
 Con el interruptor **Imantar los paneles** de la app (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:

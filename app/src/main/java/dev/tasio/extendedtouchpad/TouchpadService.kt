@@ -26,6 +26,9 @@ class TouchpadService : AccessibilityService() {
     private var dragging = false
     private var hadExternalDisplay = false
 
+    // Capa en la que están dibujados los paneles (con o sin el permiso «Mostrar sobre otras apps»).
+    private var overlayType = -1
+
     // Teclado del sistema visible en el TV (ventana de tipo teclado) y pausa del auto-abrir tras cerrar el teclado.
     private var tvImeVisible = false
     private var suppressAutoOpenUntil = 0L
@@ -74,6 +77,7 @@ class TouchpadService : AccessibilityService() {
     private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Appearance.KEY_MAGNET -> main.post { onMagnetSettingChanged() }
+            OverlayLayer.KEY_PREFERRED -> main.post { refreshOverlayLayer() }
             Appearance.KEY_PAD_OPACITY -> panel.applyAlpha()
             Appearance.KEY_KB_OPACITY -> keyboard.applyAlpha()
             Appearance.KEY_DARK, Appearance.KEY_ACCENT, Appearance.KEY_CURSOR_DP, Appearance.KEY_CURSOR_COLOR,
@@ -189,6 +193,7 @@ class TouchpadService : AccessibilityService() {
         magnet.keyboard = keyboard.magnetPanel
         panel.magnet = magnet
         keyboard.magnet = magnet
+        overlayType = OverlayLayer.panelType(this)
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
@@ -267,6 +272,18 @@ class TouchpadService : AccessibilityService() {
         private set(value) = getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, value).apply()
 
     val isKeyboardShown: Boolean get() = keyboard.isShown
+
+    /**
+     * Si cambió la capa de los paneles (se concedió o retiró el permiso «Mostrar sobre otras apps», o se cambió el
+     * ajuste), se reconstruyen para que usen la nueva.
+     */
+    fun refreshOverlayLayer() {
+        val type = OverlayLayer.panelType(this)
+        if (type == overlayType) return
+        overlayType = type
+        main.removeCallbacks(rebuild)
+        main.post(rebuild)
+    }
 
     /** El panel se movió, cambió de tamaño o apareció: con el imán se acopla al teclado; si no, el teclado se aparta. */
     private fun onPanelSettled() {

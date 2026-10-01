@@ -121,6 +121,7 @@ class SettingsActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // El servicio puede haberse activado en Ajustes, y la transparencia también se cambia desde los paneles.
+        TouchpadService.instance?.refreshOverlayLayer() // por si se concedió el permiso «Mostrar sobre otras apps»
         refreshDynamic()
         renderAppearance()
     }
@@ -194,7 +195,7 @@ class SettingsActivity : Activity() {
         setupHolder.addView(
             ui.stepRow(
                 1, "Activa el servicio de accesibilidad",
-                "Permite dibujar el cursor en el TV y enviarle toques y texto. Es el único permiso que necesita la app.",
+                "Permite dibujar el cursor en la pantalla externa y enviarle toques y texto. Es el único permiso que necesita la app.",
                 done = serviceOk,
             ),
             ui.params(ui.match, ui.wrap, top = 18),
@@ -341,16 +342,40 @@ class SettingsActivity : Activity() {
         )
         divide()
         row(
-            ui.switchRow("Teclado automático", "Abre el teclado al enfocar un campo de texto en el TV, con el touchpad o con un mouse.", service?.isAutoOpenKeyboard != false, active) {
+            ui.switchRow("Teclado automático", "Abre el teclado al enfocar un campo de texto en la pantalla externa, con el touchpad o con un mouse.", service?.isAutoOpenKeyboard != false, active) {
                 if (TouchpadService.instance?.isAutoOpenKeyboard != it) TouchpadService.instance?.toggleAutoOpenKeyboard()
             },
         )
+        divide()
+        val canOverlay = OverlayLayer.hasPermission(this)
+        row(
+            ui.switchRow(
+                "Paneles por debajo del centro de control",
+                if (canOverlay) {
+                    "El panel y el teclado quedan detrás de las notificaciones y del centro de control cuando los bajas."
+                } else {
+                    "Requiere el permiso «Mostrar sobre otras apps». Sin él, los paneles se ven por encima del centro de control."
+                },
+                OverlayLayer.isPreferred(this),
+            ) { on ->
+                OverlayLayer.setPreferred(this, on)
+                if (on && !OverlayLayer.hasPermission(this)) openOverlayPermission()
+                refreshDynamic()
+            },
+        )
+        if (OverlayLayer.isPreferred(this) && !canOverlay) {
+            row(ui.secondaryButton("Conceder el permiso «Mostrar sobre otras apps»") { openOverlayPermission() }, top = 12)
+        }
         divide()
         row(
             ui.switchRow("Imantar los paneles", "Cerca uno del otro, el panel y el teclado se pegan por el centro de cada lado y se vuelven a centrar al cambiar de tamaño.", appearance.magnet) {
                 appearance.setMagnet(it)
             },
         )
+    }
+
+    private fun openOverlayPermission() {
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
     }
 
     private fun renderDiagnostics() {
@@ -377,7 +402,7 @@ class SettingsActivity : Activity() {
             ui.params(ui.match, ui.wrap, top = 8),
         )
         diagnosticsHolder.addView(
-            ui.secondaryButton("Tap de prueba en el centro del TV") {
+            ui.secondaryButton("Tap de prueba en el centro de la pantalla externa") {
                 val service = TouchpadService.instance
                 if (service == null) ProbeLog.add("El servicio de accesibilidad no está activo") else service.testTapCenter()
             },
@@ -483,7 +508,7 @@ class SettingsActivity : Activity() {
         }, gap())
 
         appearanceHolder.addView(ui.card().apply {
-            addView(ui.cardTitle("Cursor en el TV"))
+            addView(ui.cardTitle("Cursor en la pantalla externa"))
             addView(ui.text("Forma", 15f), ui.params(ui.match, ui.wrap, top = 16))
             addView(shapes(), ui.params(ui.match, ui.wrap, top = 8))
             addView(

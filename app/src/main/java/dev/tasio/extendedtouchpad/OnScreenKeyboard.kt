@@ -37,7 +37,7 @@ class OnScreenKeyboard(
     private val ctx = service
     private val softKeyboard = service.softKeyboardController
     private var previousShowMode: Int? = null
-    private val wm = service.getSystemService(WindowManager::class.java)
+    private var wm: WindowManager = service.getSystemService(WindowManager::class.java)
     private val density = service.resources.displayMetrics.density
     private val main = Handler(Looper.getMainLooper())
 
@@ -125,6 +125,9 @@ class OnScreenKeyboard(
 
     fun show() {
         if (root != null) return
+        // Capa de la ventana: por debajo del centro de control si hay permiso; si no, la de accesibilidad.
+        val windowType = OverlayLayer.panelType(ctx)
+        wm = OverlayLayer.windowManager(ctx, windowType)
         val bounds = wm.maximumWindowMetrics.bounds
         val margin = dp(MARGIN_DP)
         widthPx = prefs.getInt(KEY_W, min((bounds.width() * 0.62f).toInt(), dp(MAX_WIDTH_DP)))
@@ -211,7 +214,7 @@ class OnScreenKeyboard(
 
         val params = WindowManager.LayoutParams(
             width + 2 * margin, WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            windowType,
             // NOT_FOCUSABLE: nunca toma el foco ni el teclado del sistema.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -225,7 +228,7 @@ class OnScreenKeyboard(
             y = prefs.getInt(KEY_Y, bounds.height() - dp(300) - dp(24))
         }
         try {
-            wm.addView(container, params)
+            wm = OverlayLayer.addWithFallback(ctx, container, params, wm)
         } catch (t: Throwable) {
             ProbeLog.add("Teclado: no se pudo crear el overlay: ${t.javaClass.simpleName}: ${t.message}")
             return
@@ -567,7 +570,7 @@ class OnScreenKeyboard(
             Key.Enter -> {
                 val node = remote.focusedInput(externalDisplayId())
                 if (node == null) {
-                    showMessage("No hay un campo de texto enfocado en el TV")
+                    showMessage("Sin campo de texto enfocado")
                 } else if (remote.enter(node)) {
                     afterEnter = true
                     passwordBuffer.clear()
@@ -602,7 +605,7 @@ class OnScreenKeyboard(
         val node = remote.focusedInput(externalDisplayId())
         if (node == null) {
             ProbeLog.add("Teclado: ${remote.lastDiagnosis}")
-            showMessage("No hay un campo de texto enfocado en el TV")
+            showMessage("Sin campo de texto enfocado")
             return
         }
         // Tras un Enter, escribir empieza un texto nuevo; borrar sigue operando sobre el contenido real.
@@ -639,7 +642,7 @@ class OnScreenKeyboard(
         }
         if (!remote.write(node, result.text, result.caret)) {
             ProbeLog.add("Teclado: ${remote.lastDiagnosis}")
-            showMessage("El campo del TV no acepta texto desde aquí")
+            showMessage("Ese campo no acepta texto desde aquí")
             return
         }
         showText(result.text, node.isPassword)
@@ -650,7 +653,7 @@ class OnScreenKeyboard(
     private fun refreshPreview() {
         val node = remote.focusedInput(externalDisplayId())
         if (node == null) {
-            showMessage("Toca un campo de texto en el TV")
+            showMessage("Toca un campo de texto")
         } else if (afterEnter) {
             showText("", false)
         } else {

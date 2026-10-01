@@ -4,6 +4,8 @@
     <!-- Para reactivar el servicio de accesibilidad si Android lo apaga. Solo se concede por ADB; sin él no se usa. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Opcional: permite dibujar los paneles por DEBAJO del centro de control y las notificaciones. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="false"
