@@ -11,7 +11,12 @@ import android.service.quicksettings.TileService
 
 /** Mosaico de ajustes rápidos para abrir y cerrar el teclado, independiente del panel. */
 class KeyboardTileService : TileService() {
-    override fun onStartListening() = refresh()
+    override fun onStartListening() {
+        // Tras forzar la detención de la app, desplegar el centro de control arranca este servicio: se aprovecha
+        // para reactivar el de accesibilidad (solo si se concedió el permiso por ADB).
+        if (TouchpadService.instance == null) ServiceKeeper.ensureEnabled(this)
+        refresh()
+    }
 
     override fun onClick() {
         val service = TouchpadService.instance

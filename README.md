@@ -18,20 +18,34 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
   - **Luna / sol:** alterna entre tema claro y oscuro.
   - **Puntos:** arrastrar para mover el panel.
   - **Tuerca:** abre los ajustes de apariencia de la app.
-  - **✕:** cierra el panel. Se vuelve a abrir con **Activar touchpad** en la app.
+  - **✕:** cierra el panel. Se vuelve a abrir con el interruptor **Touchpad activado** de la app.
 - **Franja inferior:** el **icono de teclado** de la izquierda (el mismo dibujo que el mosaico del teclado; se rellena con el color de acento mientras el teclado está abierto) abre y cierra el teclado a mano; el **asa de la esquina derecha** (solo ella) cambia el tamaño del panel (ancho y alto). El resto de la franja no hace nada. Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
-- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet, venga el foco del touchpad o de un mouse físico (se puede desactivar con **Desactivar teclado automático** en la app). También se abre a mano con el icono de la franja inferior o con el mosaico **Teclado** del centro de control.
+- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet, venga el foco del touchpad o de un mouse físico (se puede desactivar con el interruptor **Teclado automático** de la app). También se abre a mano con el icono de la franja inferior o con el mosaico **Teclado** del centro de control.
 
 ## Atajos en el centro de control
 
-La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Agregar atajo del touchpad/teclado al centro de control** de la app (Android 13+) o editando el centro de control, y se mantienen sincronizados con el panel y la app:
+La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Agregar Touchpad** y **Agregar Teclado** de la tarjeta «Atajos en el centro de control» de la app (Android 13+, que además trae el tutorial paso a paso) o editando el centro de control, y se mantienen sincronizados con el panel y la app:
 
 - **Touchpad:** activa y desactiva el touchpad. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad).
 - **Teclado:** abre y cierra el teclado. Muestra Abierto, Cerrado, Sin pantalla externa o Servicio apagado. No depende del touchpad.
 
+## Mantener el servicio activo
+
+Si se fuerza la detención de la app, Android apaga su servicio de accesibilidad y hay que volver a activarlo en Ajustes. Para evitarlo, la app puede reactivarlo sola, pero necesita el permiso `WRITE_SECURE_SETTINGS`, que **solo se concede por ADB, una vez, desde una PC** (con la depuración USB activada y la tablet conectada). La tarjeta **Mantener el servicio activo** de la app lo explica y permite copiar los comandos:
+
+```bash
+adb kill-server
+adb start-server
+adb wait-for-device shell pm grant dev.tasio.extendedtouchpad android.permission.WRITE_SECURE_SETTINGS
+```
+
+Reiniciar el servidor de ADB y esperar a la tablet evita el fallo habitual de `no devices/emulators found`: el servidor suele perder el dispositivo si pasa tiempo entre un comando y otro. Si `adb` no está en el PATH, usa la ruta completa (`~/Android/Sdk/platform-tools/adb`).
+
+Con el permiso concedido (la tarjeta pasa a «Permiso concedido» y muestra un interruptor), el servicio se reactiva al **abrir la app**, al **desplegar el centro de control** con un mosaico agregado y al **encender la tablet**. Tras una detención forzada la app no puede ejecutar nada por sí sola hasta una de esas acciones. Sin el permiso la función no hace nada.
+
 ## Imán entre paneles
 
-En **Apariencia → Imantar los paneles** (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:
+Con el interruptor **Imantar los paneles** de la app (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:
 
 - Si cambia el tamaño de cualquiera de los dos (asa de la esquina, ancho del teclado o fila de números), el acoplado se vuelve a pegar y centrar al instante.
 - Arrastrar uno de los dos los separa; se sueltan al alejarse más de 24 dp, y el otro no sigue.
@@ -40,9 +54,19 @@ En **Apariencia → Imantar los paneles** (desactivado por defecto). Con el imá
 
 Los paneles no llevan sombra y su ventana es exactamente su tarjeta, por lo que quedan borde con borde sin superponerse. Constantes: `SNAP_DP` y `RELEASE_DP` en `PanelMagnet.kt`, duración del deslizamiento en `WindowMover.kt`.
 
+## La app
+
+La app es una única pantalla de configuración, oscura y minimalista (grises azulados con acento violeta; paleta en `Ui.kt`), organizada en tarjetas:
+
+- **Primeros pasos:** guía con estado en vivo para activar el servicio de accesibilidad (el único permiso que necesita), con la ayuda de «ajustes restringidos» y el paso de conectar una pantalla externa. Cuando el servicio está activo se reduce a «Listo», con un botón para volver a ver la guía.
+- **Atajos en el centro de control:** tutorial de los mosaicos y botones para agregarlos.
+- **Touchpad y teclado:** interruptores de touchpad activado, teclado automático e imán entre paneles.
+- **Apariencia:** transparencias, tema y acento de los paneles, y cursor (forma, tamaño y color). Se aplica en vivo.
+- **Diagnóstico** (plegado): displays detectados, registro y tap de prueba.
+
 ## Apariencia
 
-En la app, **Apariencia** (o la tuerca del panel): transparencia del panel y del teclado, tema claro/oscuro, color de acento y cursor (forma, tamaño y color). Los cambios se aplican en vivo. La transparencia y el tema también se cambian desde el panel y el teclado.
+En la app, sección **Apariencia** (la tuerca de los paneles abre la app): transparencia del panel y del teclado, tema claro/oscuro, color de acento y cursor (forma, tamaño y color). Los cambios se aplican en vivo. La transparencia y el tema también se cambian desde el panel y el teclado.
 
 Formas de cursor: Clásico, Contorno, Moderno (cuña de dos tonos), Punto y Mira. En Punto y Mira el clic cae en el centro de la figura; en las flechas, en la punta.
 
@@ -93,13 +117,15 @@ Con USB o con Depuración inalámbrica activada en la tablet (Opciones de desarr
 
 ## Activar el servicio de accesibilidad
 
+La tarjeta **Primeros pasos** de la app lo guía:
+
 1. Abre la app **Extended Touchpad** y pulsa **Abrir ajustes de accesibilidad**.
 2. Entra en **Extended Touchpad** (puede estar en "Apps instaladas") y actívalo.
-3. Si el interruptor sale bloqueado ("Ajuste restringido"): Ajustes → Apps → Extended Touchpad → menú ⋮ (arriba a la derecha) → **Permitir ajustes restringidos**, y vuelve al paso 2. Android 13+ bloquea así los servicios de accesibilidad de APKs instalados a mano.
+3. Si el interruptor sale bloqueado ("Ajuste restringido"): pulsa **Abrir información de la app** → menú ⋮ (arriba a la derecha) → **Permitir ajustes restringidos**, y vuelve al paso 2. Android 13+ bloquea así los servicios de accesibilidad de APKs instalados a mano.
 
 ## Diagnóstico
 
-La app muestra los displays detectados (id, resolución, flags), el estado del servicio y un registro. El botón **Tap de prueba** dispara un tap en el centro del display externo. También se puede leer el log por ADB:
+En la tarjeta plegable **Diagnóstico** de la app: displays detectados (id, resolución, flags), registro y el botón **Tap de prueba en el centro del TV**, que dispara un tap en el centro del display externo. También se puede leer el log por ADB:
 
 ```bash
 ~/Android/Sdk/platform-tools/adb logcat -s ExtTouchpad
