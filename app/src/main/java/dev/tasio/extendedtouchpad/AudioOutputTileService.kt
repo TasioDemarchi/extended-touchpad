@@ -22,12 +22,16 @@ class AudioOutputTileService : TileService() {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
     }
 
+    override fun onTileAdded() = ProbeLog.add("Mosaico Audio: agregado")
+
     override fun onStartListening() {
+        ProbeLog.add("Mosaico Audio: escuchando")
         getSystemService(AudioManager::class.java).registerAudioDeviceCallback(audioCallback, Handler(Looper.getMainLooper()))
         refresh()
     }
 
     override fun onStopListening() {
+        ProbeLog.add("Mosaico Audio: dejó de escuchar")
         getSystemService(AudioManager::class.java).unregisterAudioDeviceCallback(audioCallback)
     }
 
@@ -43,7 +47,11 @@ class AudioOutputTileService : TileService() {
     }
 
     private fun refresh() {
-        val tile = qsTile ?: return
+        val tile = qsTile
+        if (tile == null) {
+            ProbeLog.add("Mosaico Audio: refresco ignorado (el mosaico no está escuchando)")
+            return
+        }
         val device = AudioOutputs.current(this)
         ProbeLog.add("Mosaico Audio: dispositivo=${AudioOutputs.displayName(device)} tipo=${device?.type} inalámbrico=${AudioOutputs.isWireless(device)}")
         tile.label = "Audio"

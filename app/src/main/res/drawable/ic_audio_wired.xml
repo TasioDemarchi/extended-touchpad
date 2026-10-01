@@ -9,27 +9,28 @@
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M2,9.2h3.2L9.6,5.4v13.2L5.2,14.8H2z" />
-    <!-- Onda de sonido -->
+    <!-- Onda de sonido (más corta que antes para no tocar la ficha) -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M11.6,9.2a3.6,3.6 0 0 1 0,5.6"
+        android:pathData="M11.4,9.6a3,3 0 0 1 0,4.8"
         android:strokeColor="#FFFFFF"
         android:strokeLineCap="round"
         android:strokeWidth="1.6" />
-    <!-- Ficha: cuerpo, dos clavijas y el cable que baja -->
+    <!-- Ficha: cuerpo y dos clavijas, bien separadas de la onda -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M14.2,8.6h4.4a1,1 0 0 1 1,1v4.8a1,1 0 0 1 -1,1h-4.4a1,1 0 0 1 -1,-1V9.6a1,1 0 0 1 1,-1z" />
+        android:pathData="M16.2,8.4h3.4a1,1 0 0 1 1,1v4.2a1,1 0 0 1 -1,1h-3.4a1,1 0 0 1 -1,-1V9.4a1,1 0 0 1 1,-1z" />
     <path
         android:fillColor="#00000000"
-        android:pathData="M19.6,10.6h2M19.6,13.4h2"
+        android:pathData="M18,5.6v2.8M20,5.6v2.8"
         android:strokeColor="#FFFFFF"
         android:strokeLineCap="round"
         android:strokeWidth="1.5" />
+    <!-- Cable que sale de la ficha hacia abajo -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M15.8,15.4v2.6q0,2.2 -2.2,2.2H11"
+        android:pathData="M17.9,14.6v3.2q0,2 -2,2h-1.6"
         android:strokeColor="#FFFFFF"
         android:strokeLineCap="round"
-        android:strokeWidth="1.5" />
+        android:strokeWidth="1.6" />
 </vector>
