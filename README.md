@@ -34,7 +34,7 @@ La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Ag
 
 Al conectar un monitor o TV, el audio suele salir por sus parlantes. El mosaico **Audio** del centro de control pasa, en cada toque, al **siguiente dispositivo de salida** (parlante interno, monitor HDMI/DisplayPort, auriculares con cable, Bluetooth…) y vuelve a empezar al llegar al final. Se agrega con el botón **Agregar Audio** de la app.
 
-- **Icono:** una onda de sonido junto a un cablecito (dispositivo por cable) o junto al símbolo de Bluetooth (inalámbrico). Muestra además el nombre del dispositivo actual.
+- **Icono del mosaico:** unos auriculares, fijo (el panel de Lenovo no repintaba de forma fiable un icono dinámico); el nombre del dispositivo actual va en el texto del mosaico. En la pantalla de cambio, el icono del dispositivo nuevo es el símbolo **USB** (por cable) o el de **Bluetooth** (inalámbrico), con el color de acento.
 - **Aviso:** al cambiar aparece un mensaje corto con el dispositivo elegido. Usa el nombre real si el sistema lo ofrece (Bluetooth, monitor que informa su modelo) y, si no, uno genérico: «Parlante interno», «Monitor HDMI», «Auriculares con cable», «Auriculares USB», «Dispositivo Bluetooth». Los nombres de nodos de hardware como `soc:qcom,msm-ext-disp` se tratan como «no informa nombre».
 - **Lista dinámica:** se actualiza sola al conectar o desconectar una salida (`AudioDeviceCallback`).
 - **Requiere el servicio de accesibilidad activo.** Sin él, el mosaico abre el selector de audio del sistema para elegir a mano.
