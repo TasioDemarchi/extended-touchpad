@@ -31,7 +31,7 @@ La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Ag
 
 ## Imán entre paneles
 
-En **Apariencia → Imantar los paneles** (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. Una vez pegados:
+En **Apariencia → Imantar los paneles** (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:
 
 - Si cambia el tamaño de cualquiera de los dos (asa de la esquina, ancho del teclado o fila de números), el acoplado se vuelve a pegar y centrar al instante.
 - Arrastrar uno de los dos los separa; se sueltan al alejarse más de 24 dp, y el otro no sigue.

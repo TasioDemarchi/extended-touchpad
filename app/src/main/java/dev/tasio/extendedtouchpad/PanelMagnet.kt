@@ -135,44 +135,53 @@ class PanelMagnet(
 
     // ---------------------------------------------------------------- geometría
 
-    /** El lado más cercano al que [desired] puede pegarse a [anchor] (con su posición pegada y centrada), si hay alguno. */
+    /**
+     * El lado más cercano al que [desired] puede pegarse a [anchor] (con su posición pegada y centrada), si hay alguno.
+     * Solo cuentan los tramos centrales de cada lado: el centro de [desired] debe estar alineado con el centro de ese
+     * lado de [anchor], con cierta tolerancia. Así, cerca de las esquinas no se pega por ningún lado.
+     */
     private fun bestSnap(desired: Rect, anchor: Rect, current: Side?): Pair<Side, Point>? {
         val screenRect = screen()
         var best: Triple<Side, Int, Point>? = null
         for (side in Side.entries) {
             val gap: Int
-            val overlapsAlongEdge: Boolean
+            val centerOffset: Int // separación entre los centros, a lo largo del borde compartido
+            val edgeLength: Int // largo del lado de [anchor] que se comparte
             when (side) {
                 Side.RIGHT -> {
                     gap = abs(desired.left - anchor.right)
-                    overlapsAlongEdge = verticalOverlap(desired, anchor)
+                    centerOffset = abs(desired.centerY() - anchor.centerY())
+                    edgeLength = anchor.height()
                 }
 
                 Side.LEFT -> {
                     gap = abs(desired.right - anchor.left)
-                    overlapsAlongEdge = verticalOverlap(desired, anchor)
+                    centerOffset = abs(desired.centerY() - anchor.centerY())
+                    edgeLength = anchor.height()
                 }
 
                 Side.BOTTOM -> {
                     gap = abs(desired.top - anchor.bottom)
-                    overlapsAlongEdge = horizontalOverlap(desired, anchor)
+                    centerOffset = abs(desired.centerX() - anchor.centerX())
+                    edgeLength = anchor.width()
                 }
 
                 Side.TOP -> {
                     gap = abs(desired.bottom - anchor.top)
-                    overlapsAlongEdge = horizontalOverlap(desired, anchor)
+                    centerOffset = abs(desired.centerX() - anchor.centerX())
+                    edgeLength = anchor.width()
                 }
             }
-            val limit = if (side == current) releasePx else snapPx
-            if (!overlapsAlongEdge || gap > limit) continue
+            // Una vez pegado, la zona para seguir pegado es algo más amplia (evita parpadeos en el límite).
+            val pegado = side == current
+            val gapLimit = if (pegado) releasePx else snapPx
+            val centerLimit = edgeLength * (if (pegado) CENTER_ZONE_RELEASE else CENTER_ZONE)
+            if (gap > gapLimit || centerOffset > centerLimit) continue
             val p = place(side, desired.width(), desired.height(), anchor, screenRect) ?: continue
             if (best == null || gap < best.second) best = Triple(side, gap, p)
         }
         return best?.let { it.first to it.third }
     }
-
-    private fun verticalOverlap(a: Rect, b: Rect) = a.top < b.bottom + snapPx && a.bottom > b.top - snapPx
-    private fun horizontalOverlap(a: Rect, b: Rect) = a.left < b.right + snapPx && a.right > b.left - snapPx
 
     /**
      * Posición de la tarjeta de tamaño ([w], [h]) pegada a [anchor] por [side] y centrada sobre el borde compartido.
@@ -223,5 +232,12 @@ class PanelMagnet(
         /** Distancia entre bordes a la que un panel se pega al otro, y a la que se suelta una vez pegado. */
         private const val SNAP_DP = 12
         private const val RELEASE_DP = 24
+
+        /**
+         * Tolerancia del alineado de centros, como fracción del largo del lado: ±30 % para pegarse (el 60 % central
+         * del lado) y ±42 % para seguir pegado. El resto, cerca de las esquinas, no es imantado.
+         */
+        private const val CENTER_ZONE = 0.30f
+        private const val CENTER_ZONE_RELEASE = 0.42f
     }
 }
