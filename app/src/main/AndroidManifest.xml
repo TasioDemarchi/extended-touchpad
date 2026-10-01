@@ -21,6 +21,20 @@
             android:label="Apariencia" />
 
         <service
+            android:name=".TouchpadTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_touchpad_tile"
+            android:label="Touchpad"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
             android:name=".TouchpadService"
             android:exported="true"
             android:label="@string/app_name"

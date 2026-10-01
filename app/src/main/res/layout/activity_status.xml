@@ -35,6 +35,12 @@
             android:layout_height="wrap_content" />
 
         <Button
+            android:id="@+id/btn_add_tile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Agregar atajo al centro de control" />
+
+        <Button
             android:id="@+id/btn_appearance"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

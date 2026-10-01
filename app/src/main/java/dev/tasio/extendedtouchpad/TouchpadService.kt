@@ -20,6 +20,7 @@ class TouchpadService : AccessibilityService() {
     private lateinit var injector: GestureInjector
     private lateinit var dragStroke: DragStroke
     private var dragging = false
+    private var hadExternalDisplay = false
     private lateinit var keyboard: OnScreenKeyboard
     private lateinit var appearance: Appearance
     private lateinit var settings: SharedPreferences
@@ -157,6 +158,7 @@ class TouchpadService : AccessibilityService() {
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
+        TouchpadTileService.requestRefresh(this)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -171,6 +173,7 @@ class TouchpadService : AccessibilityService() {
         cursor.detach()
         instance = null
         ProbeLog.add("Servicio de accesibilidad desconectado")
+        TouchpadTileService.requestRefresh(this)
         return super.onUnbind(intent)
     }
 
@@ -202,11 +205,16 @@ class TouchpadService : AccessibilityService() {
     fun setEnabled(enabled: Boolean) {
         isTouchpadEnabled = enabled
         sync()
+        TouchpadTileService.requestRefresh(this)
     }
 
     /** Hace que cursor y panel reflejen: ¿hay display externo? ¿está activado el touchpad? */
     private fun sync() {
         val external = Displays.external(this)
+        if ((external != null) != hadExternalDisplay) {
+            hadExternalDisplay = external != null
+            TouchpadTileService.requestRefresh(this)
+        }
         val locked = isLocked()
         if (external == null || !isTouchpadEnabled || locked) {
             if (panel.isShown || cursor.isAttached) {

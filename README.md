@@ -22,6 +22,10 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
 - **Franja inferior (asa en la esquina):** arrastrar para cambiar el tamaño del panel (ancho y alto). Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
 - **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet (se puede desactivar con **Desactivar teclado automático** en la app). No hay un botón para abrirlo a mano.
 
+## Atajo en el centro de control
+
+La app incluye un mosaico de ajustes rápidos, **Touchpad**, que activa y desactiva el touchpad con un toque. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad). Se agrega desde el botón **Agregar atajo al centro de control** de la app (Android 13+) o editando el centro de control. Se mantiene sincronizado con la ✕ del panel y con el botón de la app.
+
 ## Apariencia
 
 En la app, **Apariencia** (o la tuerca del panel): transparencia del panel y del teclado, tema claro/oscuro, color de acento y cursor (forma, tamaño y color). Los cambios se aplican en vivo. La transparencia y el tema también se cambian desde el panel y el teclado.
