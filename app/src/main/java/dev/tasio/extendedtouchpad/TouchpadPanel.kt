@@ -165,7 +165,7 @@ class TouchpadPanel(
         val footer = ResizeGripView(service, appearance, object : ResizeGripView.Callbacks {
             override fun onResize(dx: Float, dy: Float) = resizeBy(dx, dy)
             override fun onResizeEnd() = saveSize()
-        }, onKeyboard = { listener.onKeyboard() }, keyboardActive = { keyboardState() })
+        }, leftIcon = ResizeGripView.LeftIcon.KEYBOARD, onLeftIcon = { listener.onKeyboard() }, leftActive = { keyboardState() })
 
         val cardView = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL

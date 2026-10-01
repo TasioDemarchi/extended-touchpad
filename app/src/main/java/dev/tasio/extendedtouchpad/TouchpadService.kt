@@ -227,6 +227,7 @@ class TouchpadService : AccessibilityService() {
         val externalId = Displays.external(this)?.displayId ?: return
         val source = event.source
         if (remoteInput.remember(source, externalId)) {
+            if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) keyboard.onRemoteFieldClicked()
             openKeyboardAutomatically("foco o clic en un campo del TV")
         } else if (source != null && source.isEditable) {
             // La lista de ventanas del TV puede ir un instante por detrás del evento: se reintenta una vez.

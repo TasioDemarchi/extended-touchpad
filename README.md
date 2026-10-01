@@ -48,7 +48,7 @@ Formas de cursor: Clásico, Contorno, Moderno (cuña de dos tonos), Punto y Mira
 
 ## Teclado
 
-Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No depende del touchpad: solo necesita una pantalla externa conectada y la tablet desbloqueada. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior. En esa barra, de izquierda a derecha: el título con el texto del campo, **touchpad** (activa o desactiva el touchpad; se rellena con el acento si está activo), **◐** (transparencia), **123** (añade una fila de números sobre las letras; se recuerda), **tuerca** (abre los ajustes de apariencia) y **✕** (cerrar). El ancho mínimo del teclado es de 340 dp para que quepan los iconos y el título. El asa de la esquina inferior derecha cambia su tamaño (las teclas crecen con el ancho).
+Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No depende del touchpad: solo necesita una pantalla externa conectada y la tablet desbloqueada. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior. En esa barra, de izquierda a derecha: el título con el texto del campo, **◐** (transparencia), **123** (añade una fila de números sobre las letras; se recuerda), **tuerca** (abre los ajustes de apariencia) y **✕** (cerrar). El ancho mínimo del teclado es de 340 dp para que quepan los iconos y el título. La franja inferior (igual de alta que la del panel del touchpad) lleva a la izquierda el **icono de touchpad** (activa o desactiva el touchpad; se rellena con el acento si está activo) y a la derecha el asa de la esquina, que cambia su tamaño (las teclas crecen con el ancho); el resto de la franja no hace nada.
 
 **Colocación.** Al abrirse, el teclado busca la posición libre más cercana a la habitual que no tape el panel del touchpad (izquierda, derecha, encima, debajo o las esquinas); si no hay espacio, elige la que lo tape menos, nunca por completo. También se aparta solo al terminar de mover o redimensionar el panel, al redimensionar el teclado o al activar el touchpad con el teclado abierto. Si lo arrastras tú encima del panel, se queda donde lo dejes.
 
@@ -65,7 +65,7 @@ Constantes de sensibilidad: `MOVE_SCALE` y `SCROLL_GAIN` en `TouchpadService.kt`
 
 Los overlays de accesibilidad se dibujan sobre la pantalla de bloqueo, así que con la tablet bloqueada o con la pantalla apagada se ocultan el panel, el teclado y el cursor del TV, y vuelven al desbloquear. El estado se consulta a `KeyguardManager` (con comprobación periódica mientras está bloqueada), porque `ACTION_USER_PRESENT` no llega en todos los dispositivos (no llega en la Legion Tab 5).
 
-Tras un Enter en el teclado, la vista previa se vacía y la siguiente letra empieza un texto nuevo en ese campo (borrar sigue operando sobre el contenido real).
+Tras un Enter en el teclado, la vista previa se vacía y la siguiente letra empieza un texto nuevo (borrar sigue operando sobre el contenido real). Es un estado "justo después de un Enter" que no depende del campo concreto, porque al lanzar una búsqueda la página se recarga y el campo pasa a ser otro nodo para Android. Termina al escribir, al borrar, al hacer clic en un campo del TV o al cerrar el teclado.
 
 ## Limitaciones conocidas
 

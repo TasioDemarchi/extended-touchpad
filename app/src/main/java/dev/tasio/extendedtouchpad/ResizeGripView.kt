@@ -6,16 +6,21 @@ import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
 
-/** Franja inferior con un asa en la esquina: arrastrarla cambia el tamaño del panel o del teclado. */
+/**
+ * Franja inferior de un panel. En la esquina derecha tiene un asa que cambia el tamaño del panel; el resto de la
+ * franja no hace nada, salvo un icono opcional a la izquierda (teclado en el panel del touchpad, touchpad en el
+ * panel del teclado) que ejecuta una acción y se resalta con el color de acento mientras está "activo".
+ */
 class ResizeGripView(
     context: Context,
     appearance: Appearance,
     private val cb: Callbacks,
-    /** Si no es null, se dibuja un icono de teclado a la izquierda de la franja que ejecuta esta acción al tocarlo. */
-    private val onKeyboard: (() -> Unit)? = null,
-    /** Si el teclado está abierto, el icono se resalta con el color de acento. */
-    private val keyboardActive: () -> Boolean = { false },
+    private val leftIcon: LeftIcon? = null,
+    private val onLeftIcon: () -> Unit = {},
+    private val leftActive: () -> Boolean = { false },
 ) : View(context) {
+    enum class LeftIcon { KEYBOARD, TOUCHPAD }
+
     interface Callbacks {
         /** Desplazamiento en px desde el último evento (positivo = más grande). */
         fun onResize(dx: Float, dy: Float)
@@ -30,20 +35,26 @@ class ResizeGripView(
         strokeCap = Paint.Cap.ROUND
     }
     private val keyboardGlyph = KeyboardGlyph(appearance, d)
+    private val touchpadGlyph = TouchpadGlyph(appearance, d)
     private var lastX = 0f
     private var lastY = 0f
-    private enum class Zone { NONE, KEYBOARD, RESIZE }
+
+    private enum class Zone { NONE, ICON, RESIZE }
 
     private var zone = Zone.NONE
 
-    private fun keyboardZone() = height * 1.8f
+    private fun iconZone() = height * 1.8f
 
     /** Ancho de la esquina derecha que redimensiona: solo ahí está el asa. */
     private fun gripZone() = 44f * d
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPaint(bg)
-        if (onKeyboard != null) keyboardGlyph.draw(canvas, keyboardZone() / 2f, height / 2f, keyboardActive())
+        when (leftIcon) {
+            LeftIcon.KEYBOARD -> keyboardGlyph.draw(canvas, iconZone() / 2f, height / 2f, leftActive())
+            LeftIcon.TOUCHPAD -> touchpadGlyph.draw(canvas, iconZone() / 2f, height / 2f, leftActive())
+            null -> Unit
+        }
         // Tres rayas diagonales en la esquina inferior derecha.
         val right = width - 8f * d
         val bottom = height - 5f * d
@@ -57,7 +68,7 @@ class ResizeGripView(
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 zone = when {
-                    onKeyboard != null && e.x <= keyboardZone() -> Zone.KEYBOARD
+                    leftIcon != null && e.x <= iconZone() -> Zone.ICON
                     e.x >= width - gripZone() -> Zone.RESIZE
                     else -> Zone.NONE // el resto de la franja no hace nada
                 }
@@ -73,7 +84,7 @@ class ResizeGripView(
 
             MotionEvent.ACTION_UP -> {
                 when (zone) {
-                    Zone.KEYBOARD -> if (e.x <= keyboardZone()) onKeyboard?.invoke()
+                    Zone.ICON -> if (e.x <= iconZone()) onLeftIcon()
                     Zone.RESIZE -> cb.onResizeEnd()
                     Zone.NONE -> Unit
                 }

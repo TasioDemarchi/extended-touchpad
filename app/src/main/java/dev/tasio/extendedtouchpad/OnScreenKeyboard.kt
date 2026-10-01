@@ -48,7 +48,6 @@ class OnScreenKeyboard(
     private var card: LinearLayout? = null
     private var bar: View? = null // contenedor de la barra superior (barra normal + barra de transparencia)
     private var normalBar: View? = null
-    private var touchpadIcon: View? = null
     private var opacitySlider: View? = null
     private val closeSlider = Runnable { hideOpacitySlider() }
     private var footer: View? = null
@@ -61,9 +60,10 @@ class OnScreenKeyboard(
     private var passwordNode: AccessibilityNodeInfo? = null
     private val passwordBuffer = StringBuilder()
 
-    // Campo al que se acaba de dar Enter: su contenido pasa a ser otra cosa (p. ej. la URL de los
-    // resultados de una búsqueda). La vista previa se limpia y la siguiente tecla de texto empieza de cero.
-    private var sentNode: AccessibilityNodeInfo? = null
+    // Se acaba de dar Enter: el contenido del campo pasa a ser otra cosa (p. ej. la URL de los resultados de una
+    // búsqueda). La vista previa se vacía y la siguiente tecla de texto empieza de cero. No depende del nodo: al
+    // lanzar la búsqueda la página se recarga y el campo pasa a ser otro nodo para Android.
+    private var afterEnter = false
 
     val isShown get() = root != null
 
@@ -142,8 +142,6 @@ class OnScreenKeyboard(
         val opacityBtn = OpacityIconView(ctx, appearance).apply {
             setOnClickListener { showOpacitySlider() }
         }
-        val touchpadBtn = TouchpadIconView(ctx, appearance) { touchpadState() }
-        touchpadBtn.setOnClickListener { onTouchpadToggle() }
         val numbersBtn = NumberRowIconView(ctx, appearance) { numberRow }
         numbersBtn.setOnClickListener {
             prefs.edit().putBoolean(KEY_NUMBERS, !numberRow).apply()
@@ -163,7 +161,6 @@ class OnScreenKeyboard(
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(appearance.barColor)
             addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
-            addView(touchpadBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
             addView(opacityBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
             addView(numbersBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
             addView(settingsBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
@@ -193,7 +190,7 @@ class OnScreenKeyboard(
                 prefs.edit().putInt(KEY_W, widthPx).apply()
                 avoidPanel()
             }
-        })
+        }, leftIcon = ResizeGripView.LeftIcon.TOUCHPAD, onLeftIcon = { onTouchpadToggle() }, leftActive = { touchpadState() })
         val cardView = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -240,7 +237,6 @@ class OnScreenKeyboard(
         card = cardView
         this.bar = barHolder
         normalBar = bar
-        touchpadIcon = touchpadBtn
         opacitySlider = slider
         footer = grip
         shift = Shift.OFF
@@ -256,7 +252,7 @@ class OnScreenKeyboard(
 
     /** El touchpad se activó o desactivó: refresca el icono. */
     fun onTouchpadStateChanged() {
-        touchpadIcon?.invalidate()
+        footer?.invalidate()
     }
 
     /** Aplica la opacidad actual sin reconstruir el teclado. */
@@ -298,12 +294,11 @@ class OnScreenKeyboard(
         card = null
         bar = null
         normalBar = null
-        touchpadIcon = null
         opacitySlider = null
         footer = null
         passwordNode = null
         passwordBuffer.clear()
-        sentNode = null
+        afterEnter = false
         restoreSystemKeyboard()
         onVisibilityChanged?.invoke()
     }
@@ -434,6 +429,12 @@ class OnScreenKeyboard(
     }
 
     /** Cambió el foco en alguna ventana: actualiza la vista previa con el campo nuevo. */
+    /** El usuario hizo clic en un campo del TV: ya no se está "justo después de un Enter". */
+    fun onRemoteFieldClicked() {
+        afterEnter = false
+        if (isShown) refreshPreview()
+    }
+
     fun onRemoteFocusChanged() {
         if (isShown) refreshPreview()
     }
@@ -568,7 +569,7 @@ class OnScreenKeyboard(
                 if (node == null) {
                     showMessage("No hay un campo de texto enfocado en el TV")
                 } else if (remote.enter(node)) {
-                    sentNode = node
+                    afterEnter = true
                     passwordBuffer.clear()
                     showText("", false)
                 } else {
@@ -605,8 +606,8 @@ class OnScreenKeyboard(
             return
         }
         // Tras un Enter, escribir empieza un texto nuevo; borrar sigue operando sobre el contenido real.
-        val afterEnter = sentNode != null && sentNode == node
-        sentNode = null
+        val startAfterEnter = afterEnter
+        afterEnter = false
         var text: String
         var start: Int
         var end: Int
@@ -625,7 +626,7 @@ class OnScreenKeyboard(
             end = node.textSelectionEnd.let { if (it < 0) text.length else it.coerceAtMost(text.length) }
         }
         if (start > end) start = end.also { end = start }
-        if (afterEnter && startFresh) {
+        if (startAfterEnter && startFresh) {
             text = ""
             start = 0
             end = 0
@@ -650,7 +651,7 @@ class OnScreenKeyboard(
         val node = remote.focusedInput(externalDisplayId())
         if (node == null) {
             showMessage("Toca un campo de texto en el TV")
-        } else if (sentNode != null && sentNode == node) {
+        } else if (afterEnter) {
             showText("", false)
         } else {
             showText(if (node.isPassword) passwordBuffer.takeIf { passwordNode == node }?.toString().orEmpty() else remote.read(node), node.isPassword)
@@ -737,7 +738,7 @@ class OnScreenKeyboard(
         const val MAX_WIDTH_DP = 720
         const val BAR_DP = 36
         const val SLIDER_TIMEOUT_MS = 3000L
-        const val FOOTER_DP = 22
+        const val FOOTER_DP = 28
         const val MIN_WIDTH_DP = 340
         const val ICON_DP = 42
         const val KEY_ASPECT = 0.675f
