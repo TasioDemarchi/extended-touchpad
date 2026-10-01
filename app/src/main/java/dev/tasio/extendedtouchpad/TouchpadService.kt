@@ -5,6 +5,7 @@ import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.os.Build
@@ -20,6 +21,8 @@ class TouchpadService : AccessibilityService() {
     private lateinit var dragStroke: DragStroke
     private var dragging = false
     private lateinit var keyboard: OnScreenKeyboard
+    private lateinit var appearance: Appearance
+    private lateinit var settings: SharedPreferences
     private lateinit var remoteInput: RemoteInput
     private lateinit var keyguard: KeyguardManager
 
@@ -54,6 +57,34 @@ class TouchpadService : AccessibilityService() {
             }
             sync()
         }
+    }
+
+    // La opacidad se aplica en el acto; el resto de la apariencia reconstruye las vistas (con una pequeña
+    // espera para agrupar los cambios de un deslizador).
+    private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            Appearance.KEY_PAD_OPACITY -> panel.applyAlpha()
+            Appearance.KEY_KB_OPACITY -> keyboard.applyAlpha()
+            Appearance.KEY_DARK, Appearance.KEY_ACCENT, Appearance.KEY_CURSOR_DP, Appearance.KEY_CURSOR_COLOR,
+            Appearance.KEY_CURSOR_SHAPE,
+            -> {
+                main.removeCallbacks(rebuild)
+                main.postDelayed(rebuild, REBUILD_DELAY_MS)
+            }
+        }
+    }
+
+    private val rebuild = Runnable {
+        val keyboardWasShown = keyboard.isShown
+        val cursorX = cursor.x
+        val cursorY = cursor.y
+        val hadCursor = cursor.isAttached
+        keyboard.hide()
+        panel.hide()
+        cursor.detach()
+        sync()
+        if (hadCursor && cursor.isAttached) cursor.restorePosition(cursorX, cursorY)
+        if (keyboardWasShown && cursor.isAttached) keyboard.show()
     }
 
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -93,8 +124,8 @@ class TouchpadService : AccessibilityService() {
 
         override fun onScrollEnd() = injector.endScroll()
 
-        override fun onKeyboard() {
-            if (cursor.isAttached) keyboard.toggle()
+        override fun onSettings() {
+            startActivity(Intent(this@TouchpadService, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
 
         override fun onClose() = setEnabled(false)
@@ -102,7 +133,10 @@ class TouchpadService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
-        cursor = ExternalCursor(this)
+        settings = getSharedPreferences(PREFS, MODE_PRIVATE)
+        appearance = Appearance(settings)
+        settings.registerOnSharedPreferenceChangeListener(settingsListener)
+        cursor = ExternalCursor(this, appearance)
         injector = GestureInjector(this, main)
         dragStroke = DragStroke(this, main)
         remoteInput = RemoteInput(this)
@@ -118,8 +152,8 @@ class TouchpadService : AccessibilityService() {
         } else {
             registerReceiver(screenReceiver, screenFilter)
         }
-        keyboard = OnScreenKeyboard(this, remoteInput, getSharedPreferences(PREFS, MODE_PRIVATE)) { cursor.displayId }
-        panel = TouchpadPanel(this, getSharedPreferences(PREFS, MODE_PRIVATE), panelListener)
+        keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance) { cursor.displayId }
+        panel = TouchpadPanel(this, settings, appearance, panelListener)
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
@@ -128,6 +162,8 @@ class TouchpadService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         Displays.manager(this).unregisterDisplayListener(displayListener)
         unregisterReceiver(screenReceiver)
+        settings.unregisterOnSharedPreferenceChangeListener(settingsListener)
+        main.removeCallbacks(rebuild)
         main.removeCallbacks(screenOnCheck)
         main.removeCallbacks(lockRecheck)
         keyboard.hide()
@@ -188,6 +224,7 @@ class TouchpadService : AccessibilityService() {
         } else {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
             panel.show()
+            keyboard.relayout()
         }
         // USER_PRESENT no llega en todos los dispositivos: con la pantalla encendida y bloqueada se
         // vuelve a comprobar hasta que el sistema indique que ya no hay bloqueo.
@@ -222,6 +259,7 @@ class TouchpadService : AccessibilityService() {
         private const val PREFS = "touchpad"
         private const val SCREEN_ON_CHECK_MS = 300L
         private const val LOCK_RECHECK_MS = 500L
+        private const val REBUILD_DELAY_MS = 150L
         private const val KEY_ENABLED = "enabled"
         private const val KEY_AUTO_KEYBOARD = "auto_keyboard"
 

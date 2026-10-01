@@ -3,7 +3,7 @@
 Touchpad virtual para pantalla externa (Android, sin root). Requisitos completos en [REQUERIMIENTO.md](REQUERIMIENTO.md).
 
 **Estado: validado en una Lenovo Legion Tab 5 (Android 16) con un TV por HDMI.**
-Cursor en el display externo, panel flotante, mover, clic, scroll con dos dedos, arrastre y teclado funcionan, también al rotar la tablet.
+Cursor en el display externo, panel flotante redimensionable, mover, clic, scroll con dos dedos, arrastre, teclado y ajustes de apariencia funcionan, también al rotar la tablet.
 
 ## Uso
 
@@ -13,12 +13,24 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
 - **Tap con un dedo:** clic en la posición del cursor.
 - **Dos dedos en vertical:** scroll (un único trazo continuo en el TV).
 - **Tap y, sin soltar, apoyar de nuevo y mover (dentro de ~300 ms):** arrastre. El cursor se pone azul. Manteniéndolo quieto antes de mover se activa el long-press de la app (por ejemplo, para mover íconos del launcher).
-- **Barra superior del panel:** arrastrar para moverlo; la **X** lo cierra. Se vuelve a abrir con **Activar touchpad** en la app.
-- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet (se puede desactivar con **Desactivar teclado automático** en la app). También se abre a mano con el **icono de teclado** a la izquierda de la barra del panel.
+- **Barra superior del panel**, de izquierda a derecha:
+  - **◐ Transparencia:** cada toque baja la opacidad (100, 75, 50, 30 %) y vuelve a 100 %.
+  - **Luna / sol:** alterna entre tema claro y oscuro.
+  - **Puntos:** arrastrar para mover el panel.
+  - **Tuerca:** abre los ajustes de apariencia de la app.
+  - **✕:** cierra el panel. Se vuelve a abrir con **Activar touchpad** en la app.
+- **Franja inferior (asa en la esquina):** arrastrar para cambiar el tamaño del panel (ancho y alto). Se recuerda. La velocidad del cursor depende del ancho del panel: más grande es más lento y preciso, más pequeño es más rápido.
+- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet (se puede desactivar con **Desactivar teclado automático** en la app). No hay un botón para abrirlo a mano.
+
+## Apariencia
+
+En la app, **Apariencia** (o la tuerca del panel): transparencia del panel y del teclado, tema claro/oscuro, color de acento y cursor (forma, tamaño y color). Los cambios se aplican en vivo. La transparencia y el tema también se cambian desde el panel y el teclado.
+
+Formas de cursor: Clásico, Contorno, Moderno (cuña de dos tonos), Punto y Mira. En Punto y Mira el clic cae en el centro de la figura; en las flechas, en la punta.
 
 ## Teclado
 
-Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior; la ✕ lo cierra.
+Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, Enter), flotante y **sin foco**. No usa el teclado del sistema: cada tecla lee el texto del campo del TV y lo reescribe con `ACTION_SET_TEXT`. Se arrastra desde su barra superior, su ◐ cambia la transparencia, la ✕ lo cierra y la franja inferior cambia su tamaño (las teclas crecen con el ancho).
 
 - Requiere el permiso de accesibilidad de **leer el contenido de ventanas** (para encontrar el campo enfocado en el TV).
 - En campos de contraseña Android no entrega el texto real, así que el teclado lleva su propio registro de lo escrito.

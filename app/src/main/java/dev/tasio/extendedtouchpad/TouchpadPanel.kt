@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -22,6 +23,7 @@ import kotlin.math.min
 class TouchpadPanel(
     private val service: AccessibilityService,
     private val prefs: SharedPreferences,
+    private val appearance: Appearance,
     private val listener: Listener,
 ) {
     interface Listener {
@@ -36,7 +38,9 @@ class TouchpadPanel(
         /** Tap y, sin soltar, dedo apoyado de nuevo: empieza un arrastre en la posición del cursor. */
         fun onDragStart()
         fun onDragEnd()
-        fun onKeyboard()
+
+        /** Abre la pantalla de ajustes de la app. */
+        fun onSettings()
         fun onClose()
     }
 
@@ -44,10 +48,15 @@ class TouchpadPanel(
     private val density = service.resources.displayMetrics.density
     private var root: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
+    private var card: LinearLayout? = null
+    private var handleView: View? = null
+    private var padView: View? = null
+    private var footerView: View? = null
 
     /** Ancho del área táctil en px; el servicio lo usa para escalar el movimiento. */
     var padWidth = 0
         private set
+    private var padHeight = 0
 
     val isShown get() = root != null
 
@@ -57,11 +66,9 @@ class TouchpadPanel(
             return
         }
         val margin = dp(MARGIN_DP)
-        val handleH = dp(HANDLE_DP)
-        computeSize()
-        val padH = (padWidth * PAD_ASPECT).toInt()
+        loadSize()
 
-        val pad = PadView(service, object : PadView.Callbacks {
+        val pad = PadView(service, appearance, object : PadView.Callbacks {
             override fun onMove(dx: Float, dy: Float) = listener.onMove(dx, dy)
             override fun onTap() = listener.onTap()
             override fun onScroll(dy: Float) = listener.onScroll(dy)
@@ -69,31 +76,43 @@ class TouchpadPanel(
             override fun onDragStart() = listener.onDragStart()
             override fun onDragEnd() = listener.onDragEnd()
         })
-        val handle = HandleView(service, object : HandleView.Callbacks {
+        val handle = HandleView(service, appearance, object : HandleView.Callbacks {
             override fun onDrag(dx: Float, dy: Float) = dragBy(dx, dy)
             override fun onDragEnd() = savePosition()
-            override fun onKeyboard() = listener.onKeyboard()
+            override fun onOpacity() {
+                appearance.padOpacity = Appearance.nextOpacity(appearance.padOpacity)
+            }
+
+            override fun onTheme() = appearance.setDark(!appearance.dark)
+            override fun onSettings() = listener.onSettings()
+
             override fun onClose() = listener.onClose()
         })
+        val footer = ResizeGripView(service, appearance, object : ResizeGripView.Callbacks {
+            override fun onResize(dx: Float, dy: Float) = resizeBy(dx, dy)
+            override fun onResizeEnd() = saveSize()
+        })
 
-        val card = LinearLayout(service).apply {
+        val cardView = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
-                setColor(Color.rgb(214, 214, 214))
+                setColor(appearance.cardColor)
                 cornerRadius = dp(14).toFloat()
             }
             clipToOutline = true
             elevation = dp(8).toFloat()
-            addView(handle, LinearLayout.LayoutParams(padWidth, handleH))
-            addView(pad, LinearLayout.LayoutParams(padWidth, padH))
+            addView(handle, LinearLayout.LayoutParams(padWidth, dp(HANDLE_DP)))
+            addView(pad, LinearLayout.LayoutParams(padWidth, padHeight))
+            addView(footer, LinearLayout.LayoutParams(padWidth, dp(FOOTER_DP)))
         }
         val container = FrameLayout(service).apply {
-            addView(card, FrameLayout.LayoutParams(padWidth, handleH + padH).apply { setMargins(margin, margin, margin, margin) })
+            alpha = appearance.padOpacity / 100f
+            addView(cardView, FrameLayout.LayoutParams(padWidth, totalHeight()).apply { setMargins(margin, margin, margin, margin) })
         }
 
         val bounds = wm.maximumWindowMetrics.bounds
         val w = padWidth + 2 * margin
-        val h = handleH + padH + 2 * margin
+        val h = totalHeight() + 2 * margin
         val params = WindowManager.LayoutParams(
             w, h,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -115,9 +134,18 @@ class TouchpadPanel(
             wm.addView(container, params)
             root = container
             lp = params
+            card = cardView
+            handleView = handle
+            padView = pad
+            footerView = footer
         } catch (t: Throwable) {
             ProbeLog.add("Panel: no se pudo crear el overlay: ${t.javaClass.simpleName}: ${t.message}")
         }
+    }
+
+    /** Aplica la opacidad actual sin reconstruir el panel. */
+    fun applyAlpha() {
+        root?.alpha = appearance.padOpacity / 100f
     }
 
     fun hide() {
@@ -128,23 +156,68 @@ class TouchpadPanel(
         }
         root = null
         lp = null
+        card = null
+        handleView = null
+        padView = null
+        footerView = null
     }
 
     /** Tras una rotación o cambio de display: mantiene el panel dentro de la pantalla. */
     private fun relayout() {
         val params = lp ?: return
         val bounds = wm.maximumWindowMetrics.bounds
+        padWidth = padWidth.coerceIn(minWidth(), maxWidth(bounds.width(), 0))
+        padHeight = padHeight.coerceIn(minHeight(), maxHeight(bounds.height(), 0))
+        applySize(params)
         clamp(params, bounds.width(), bounds.height())
-        try {
-            wm.updateViewLayout(root, params)
-        } catch (_: Throwable) {
-        }
+        updateWindow(params)
     }
 
-    private fun computeSize() {
+    // ---------------------------------------------------------------- tamaño
+
+    private fun loadSize() {
         val bounds = wm.maximumWindowMetrics.bounds
-        padWidth = max(bounds.width() / 4, dp(MIN_PAD_DP))
+        val defaultW = max(bounds.width() / 4, dp(MIN_PAD_DP))
+        padWidth = prefs.getInt(KEY_W, defaultW).coerceIn(minWidth(), maxWidth(bounds.width(), 0))
+        padHeight = prefs.getInt(KEY_H, (defaultW * PAD_ASPECT).toInt()).coerceIn(minHeight(), maxHeight(bounds.height(), 0))
     }
+
+    /** Cambia el tamaño del área táctil arrastrando la esquina; la esquina superior izquierda no se mueve. */
+    private fun resizeBy(dx: Float, dy: Float) {
+        val params = lp ?: return
+        val bounds = wm.maximumWindowMetrics.bounds
+        padWidth = (padWidth + dx.toInt()).coerceIn(minWidth(), maxWidth(bounds.width(), params.x))
+        padHeight = (padHeight + dy.toInt()).coerceIn(minHeight(), maxHeight(bounds.height(), params.y))
+        applySize(params)
+        updateWindow(params)
+    }
+
+    private fun applySize(params: WindowManager.LayoutParams) {
+        val margin = dp(MARGIN_DP)
+        params.width = padWidth + 2 * margin
+        params.height = totalHeight() + 2 * margin
+        card?.layoutParams = FrameLayout.LayoutParams(padWidth, totalHeight()).apply { setMargins(margin, margin, margin, margin) }
+        handleView?.layoutParams = LinearLayout.LayoutParams(padWidth, dp(HANDLE_DP))
+        padView?.layoutParams = LinearLayout.LayoutParams(padWidth, padHeight)
+        footerView?.layoutParams = LinearLayout.LayoutParams(padWidth, dp(FOOTER_DP))
+    }
+
+    private fun saveSize() {
+        prefs.edit().putInt(KEY_W, padWidth).putInt(KEY_H, padHeight).apply()
+    }
+
+    private fun totalHeight() = dp(HANDLE_DP) + padHeight + dp(FOOTER_DP)
+
+    private fun minWidth() = dp(MIN_PAD_DP)
+    private fun minHeight() = dp(MIN_PAD_HEIGHT_DP)
+
+    /** Ancho máximo del área táctil: ≤ 70 % de la pantalla y sin salirse por la derecha desde [x]. */
+    private fun maxWidth(screenW: Int, x: Int) = max(minWidth(), min((screenW * 0.7f).toInt(), screenW - x - 2 * dp(MARGIN_DP)))
+
+    private fun maxHeight(screenH: Int, y: Int) =
+        max(minHeight(), min((screenH * 0.8f).toInt(), screenH - y - 2 * dp(MARGIN_DP) - dp(HANDLE_DP) - dp(FOOTER_DP)))
+
+    // ---------------------------------------------------------------- posición
 
     private fun dragBy(dx: Float, dy: Float) {
         val params = lp ?: return
@@ -152,6 +225,10 @@ class TouchpadPanel(
         params.x += dx.toInt()
         params.y += dy.toInt()
         clamp(params, bounds.width(), bounds.height())
+        updateWindow(params)
+    }
+
+    private fun updateWindow(params: WindowManager.LayoutParams) {
         try {
             wm.updateViewLayout(root, params)
         } catch (_: Throwable) {
@@ -171,7 +248,11 @@ class TouchpadPanel(
     private fun dp(v: Int) = (v * density).toInt()
 
     /** Área táctil: un dedo mueve, tap = clic, dos dedos = scroll. */
-    private class PadView(context: android.content.Context, private val cb: Callbacks) : View(context) {
+    private class PadView(
+        context: android.content.Context,
+        private val appearance: Appearance,
+        private val cb: Callbacks,
+    ) : View(context) {
         interface Callbacks {
             fun onMove(dx: Float, dy: Float)
             fun onTap()
@@ -195,13 +276,13 @@ class TouchpadPanel(
         private var lastTapUpT = 0L
         private var lastWasTap = false
         private val hint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(70, 0, 0, 0)
+            color = appearance.hintColor
             textAlign = Paint.Align.CENTER
             textSize = 14f * resources.displayMetrics.scaledDensity
         }
 
         override fun onDraw(canvas: Canvas) {
-            canvas.drawColor(Color.rgb(224, 224, 224))
+            canvas.drawColor(appearance.padColor)
             canvas.drawText("touchpad", width / 2f, height / 2f, hint)
         }
 
@@ -300,68 +381,133 @@ class TouchpadPanel(
         }
     }
 
-    /** Asa superior: arrastrar mueve el panel; la X de la derecha lo cierra. */
-    private class HandleView(context: android.content.Context, private val cb: Callbacks) : View(context) {
+    /**
+     * Asa superior. De izquierda a derecha: transparencia, tema, puntos de arrastre (mueven el panel),
+     * ajustes y cerrar.
+     */
+    private class HandleView(
+        context: android.content.Context,
+        private val appearance: Appearance,
+        private val cb: Callbacks,
+    ) : View(context) {
         interface Callbacks {
             fun onDrag(dx: Float, dy: Float)
             fun onDragEnd()
-            fun onKeyboard()
+            fun onOpacity()
+            fun onTheme()
+            fun onSettings()
             fun onClose()
         }
 
-        private enum class Zone { DRAG, KEYBOARD, CLOSE }
+        private enum class Zone { OPACITY, THEME, DRAG, SETTINGS, CLOSE }
 
         private val d = resources.displayMetrics.density
-        private val bg = Paint().apply { color = Color.rgb(176, 176, 176) }
-        private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(150, 0, 0, 0) }
-        private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(180, 0, 0, 0)
+        private val bg = Paint().apply { color = appearance.barColor }
+        private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.subtleColor }
+        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = appearance.textColor
             strokeWidth = 2f * d
             strokeCap = Paint.Cap.ROUND
         }
-        private var downRawX = 0f
-        private var downRawY = 0f
-        private var lastRawX = 0f
-        private var lastRawY = 0f
-        private var zone = Zone.DRAG
-        private val key = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(180, 0, 0, 0)
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = appearance.textColor
             style = Paint.Style.STROKE
             strokeWidth = 1.6f * d
         }
+        private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.textColor }
+        private val moon = Path()
+        private val moonCut = Path()
+        private var lastRawX = 0f
+        private var lastRawY = 0f
+        private var zone = Zone.DRAG
+
+        private fun zoneWidth() = height * 1.1f
 
         override fun onDraw(canvas: Canvas) {
             canvas.drawPaint(bg)
             val cy = height / 2f
-            for (i in -2..2) canvas.drawCircle(width / 2f + i * 10f * d, cy, 2.5f * d, dot)
-            val cx = width - closeZone() / 2f
-            val r = 6f * d
-            canvas.drawLine(cx - r, cy - r, cx + r, cy + r, cross)
-            canvas.drawLine(cx - r, cy + r, cx + r, cy - r, cross)
+            val z = zoneWidth()
 
-            // Icono de teclado: rectángulo con tres filas de teclas.
-            val kx = closeZone() / 2f
-            val kw = 11f * d
-            val kh = 7f * d
-            canvas.drawRoundRect(kx - kw, cy - kh, kx + kw, cy + kh, 2f * d, 2f * d, key)
-            for (row in -1..1) {
-                val ry = cy + row * 3.2f * d
-                for (col in -2..2) canvas.drawPoint(kx + col * 4f * d, ry, dot)
+            drawOpacity(canvas, z * 0.5f, cy)
+            drawTheme(canvas, z * 1.5f, cy)
+            drawSettings(canvas, width - z * 1.5f, cy)
+            drawClose(canvas, width - z * 0.5f, cy)
+
+            // Puntos de arrastre: solo los que caben en el espacio libre entre los iconos, centrados ahí.
+            val freeStart = 2f * z
+            val freeEnd = width - 2f * z
+            val spacing = 10f * d
+            val count = ((freeEnd - freeStart - 2f * d) / spacing).toInt().coerceIn(1, 5)
+            val centerX = (freeStart + freeEnd) / 2f
+            for (i in 0 until count) {
+                canvas.drawCircle(centerX + (i - (count - 1) / 2f) * spacing, cy, 2.5f * d, dot)
             }
         }
 
-        private fun closeZone() = height * 1.3f
+        /** Círculo con la mitad rellena. */
+        private fun drawOpacity(canvas: Canvas, cx: Float, cy: Float) {
+            val r = 7f * d
+            canvas.drawCircle(cx, cy, r, ring)
+            canvas.drawArc(cx - r, cy - r, cx + r, cy + r, 90f, 180f, true, solid)
+        }
+
+        /** Con el tema claro muestra una luna (pasar a oscuro); con el oscuro, un sol (pasar a claro). */
+        private fun drawTheme(canvas: Canvas, cx: Float, cy: Float) {
+            val r = 7f * d
+            if (appearance.dark) {
+                canvas.drawCircle(cx, cy, r * 0.5f, solid)
+                for (i in 0 until 8) {
+                    val a = Math.toRadians(i * 45.0)
+                    val c = Math.cos(a).toFloat()
+                    val s = Math.sin(a).toFloat()
+                    canvas.drawLine(cx + c * r * 0.8f, cy + s * r * 0.8f, cx + c * r * 1.2f, cy + s * r * 1.2f, line)
+                }
+            } else {
+                moon.rewind()
+                moonCut.rewind()
+                moon.addCircle(cx, cy, r, Path.Direction.CW)
+                moonCut.addCircle(cx + r * 0.55f, cy - r * 0.4f, r * 0.85f, Path.Direction.CW)
+                moon.op(moonCut, Path.Op.DIFFERENCE)
+                canvas.drawPath(moon, solid)
+            }
+        }
+
+        /** Tuerca: anillo con dientes y un hueco central. */
+        private fun drawSettings(canvas: Canvas, cx: Float, cy: Float) {
+            val r = 5.5f * d
+            for (i in 0 until 8) {
+                val a = Math.toRadians(i * 45.0)
+                val c = Math.cos(a).toFloat()
+                val s = Math.sin(a).toFloat()
+                canvas.drawLine(cx + c * r, cy + s * r, cx + c * (r + 3f * d), cy + s * (r + 3f * d), line.apply { strokeWidth = 3f * d })
+            }
+            line.strokeWidth = 2f * d
+            ring.strokeWidth = 2.2f * d
+            canvas.drawCircle(cx, cy, r, ring)
+            ring.strokeWidth = 1.6f * d
+        }
+
+        private fun drawClose(canvas: Canvas, cx: Float, cy: Float) {
+            val r = 6f * d
+            canvas.drawLine(cx - r, cy - r, cx + r, cy + r, line)
+            canvas.drawLine(cx - r, cy + r, cx + r, cy - r, line)
+        }
+
+        private fun zoneAt(x: Float): Zone {
+            val z = zoneWidth()
+            return when {
+                x <= z -> Zone.OPACITY
+                x <= 2 * z -> Zone.THEME
+                x >= width - z -> Zone.CLOSE
+                x >= width - 2 * z -> Zone.SETTINGS
+                else -> Zone.DRAG
+            }
+        }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    zone = when {
-                        e.x >= width - closeZone() -> Zone.CLOSE
-                        e.x <= closeZone() -> Zone.KEYBOARD
-                        else -> Zone.DRAG
-                    }
-                    downRawX = e.rawX
-                    downRawY = e.rawY
+                    zone = zoneAt(e.x)
                     lastRawX = e.rawX
                     lastRawY = e.rawY
                 }
@@ -373,14 +519,20 @@ class TouchpadPanel(
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    when {
-                        zone == Zone.CLOSE && e.x >= width - closeZone() -> cb.onClose()
-                        zone == Zone.KEYBOARD && e.x <= closeZone() -> cb.onKeyboard()
-                        else -> cb.onDragEnd()
+                    if (zone == Zone.DRAG) {
+                        cb.onDragEnd()
+                    } else if (zoneAt(e.x) == zone) {
+                        when (zone) {
+                            Zone.OPACITY -> cb.onOpacity()
+                            Zone.THEME -> cb.onTheme()
+                            Zone.SETTINGS -> cb.onSettings()
+                            Zone.CLOSE -> cb.onClose()
+                            Zone.DRAG -> Unit
+                        }
                     }
                 }
 
-                MotionEvent.ACTION_CANCEL -> cb.onDragEnd()
+                MotionEvent.ACTION_CANCEL -> if (zone == Zone.DRAG) cb.onDragEnd()
             }
             return true
         }
@@ -389,9 +541,13 @@ class TouchpadPanel(
     private companion object {
         const val MARGIN_DP = 10
         const val HANDLE_DP = 36
-        const val MIN_PAD_DP = 240
+        const val FOOTER_DP = 22
+        const val MIN_PAD_DP = 220
+        const val MIN_PAD_HEIGHT_DP = 110
         const val PAD_ASPECT = 0.62f
         const val KEY_X = "panel_x"
         const val KEY_Y = "panel_y"
+        const val KEY_W = "pad_w"
+        const val KEY_H = "pad_h"
     }
 }

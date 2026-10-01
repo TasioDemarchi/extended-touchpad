@@ -27,6 +27,7 @@ class OnScreenKeyboard(
     service: AccessibilityService,
     private val remote: RemoteInput,
     private val prefs: SharedPreferences,
+    private val appearance: Appearance,
     private val externalDisplayId: () -> Int,
 ) {
     private enum class Shift { OFF, ONCE, LOCK }
@@ -42,6 +43,10 @@ class OnScreenKeyboard(
     private var lp: WindowManager.LayoutParams? = null
     private var keysBox: LinearLayout? = null
     private var preview: TextView? = null
+    private var card: LinearLayout? = null
+    private var bar: View? = null
+    private var footer: View? = null
+    private var widthPx = 0
 
     private var shift = Shift.OFF
     private var symbols = false
@@ -62,27 +67,33 @@ class OnScreenKeyboard(
         if (root != null) return
         val bounds = wm.maximumWindowMetrics.bounds
         val margin = dp(MARGIN_DP)
-        val width = min((bounds.width() * 0.62f).toInt(), dp(MAX_WIDTH_DP))
+        widthPx = prefs.getInt(KEY_W, min((bounds.width() * 0.62f).toInt(), dp(MAX_WIDTH_DP)))
+            .coerceIn(minWidth(), maxWidth(bounds.width(), 0))
+        val width = widthPx
 
         val title = TextView(ctx).apply {
             textSize = 14f
-            setTextColor(Color.argb(200, 0, 0, 0))
+            setTextColor(appearance.textColor)
             setSingleLine()
             ellipsize = android.text.TextUtils.TruncateAt.START
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(8), 0)
         }
+        val opacityBtn = OpacityIconView(ctx, appearance).apply {
+            setOnClickListener { appearance.keyboardOpacity = Appearance.nextOpacity(appearance.keyboardOpacity) }
+        }
         val closeBtn = TextView(ctx).apply {
             text = "✕"
             textSize = 18f
             gravity = Gravity.CENTER
-            setTextColor(Color.argb(200, 0, 0, 0))
+            setTextColor(appearance.textColor)
             setOnClickListener { hide() }
         }
         val bar = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.rgb(176, 176, 176))
+            setBackgroundColor(appearance.barColor)
             addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+            addView(opacityBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
             addView(closeBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
         }
         installDrag(title)
@@ -91,19 +102,27 @@ class OnScreenKeyboard(
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
-        val card = LinearLayout(ctx).apply {
+        val grip = ResizeGripView(ctx, appearance, object : ResizeGripView.Callbacks {
+            override fun onResize(dx: Float, dy: Float) = resizeBy(dx)
+            override fun onResizeEnd() {
+                prefs.edit().putInt(KEY_W, widthPx).apply()
+            }
+        })
+        val cardView = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
-                setColor(Color.rgb(214, 214, 214))
+                setColor(appearance.cardColor)
                 cornerRadius = dp(14).toFloat()
             }
             clipToOutline = true
             elevation = dp(8).toFloat()
             addView(bar, LinearLayout.LayoutParams(width, dp(BAR_DP)))
             addView(keys, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(grip, LinearLayout.LayoutParams(width, dp(FOOTER_DP)))
         }
         val container = FrameLayout(ctx).apply {
-            addView(card, FrameLayout.LayoutParams(width, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            alpha = appearance.keyboardOpacity / 100f
+            addView(cardView, FrameLayout.LayoutParams(width, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(margin, margin, margin, margin)
             })
         }
@@ -133,12 +152,20 @@ class OnScreenKeyboard(
         lp = params
         keysBox = keys
         preview = title
+        card = cardView
+        this.bar = bar
+        footer = grip
         shift = Shift.OFF
         symbols = false
         buildKeys()
         refreshPreview()
         clampToScreen()
         hideSystemKeyboard()
+    }
+
+    /** Aplica la opacidad actual sin reconstruir el teclado. */
+    fun applyAlpha() {
+        root?.alpha = appearance.keyboardOpacity / 100f
     }
 
     fun hide() {
@@ -151,11 +178,60 @@ class OnScreenKeyboard(
         lp = null
         keysBox = null
         preview = null
+        card = null
+        bar = null
+        footer = null
         passwordNode = null
         passwordBuffer.clear()
         sentNode = null
         restoreSystemKeyboard()
     }
+
+    // ---------------------------------------------------------------- tamaño
+
+    /** Cambia el ancho arrastrando la esquina; el alto de las teclas sigue al ancho. */
+    private fun resizeBy(dx: Float) {
+        val params = lp ?: return
+        val bounds = wm.maximumWindowMetrics.bounds
+        val newWidth = (widthPx + dx.toInt()).coerceIn(minWidth(), maxWidth(bounds.width(), params.x))
+        if (newWidth == widthPx) return
+        widthPx = newWidth
+        applyWidth(params)
+    }
+
+    /** Tras una rotación o cambio de display: ajusta el tamaño y la posición a la pantalla. */
+    fun relayout() {
+        val params = lp ?: return
+        val bounds = wm.maximumWindowMetrics.bounds
+        val newWidth = widthPx.coerceIn(minWidth(), maxWidth(bounds.width(), 0))
+        if (newWidth != widthPx) {
+            widthPx = newWidth
+            applyWidth(params)
+        } else {
+            clampToScreen()
+        }
+    }
+
+    private fun applyWidth(params: WindowManager.LayoutParams) {
+        val margin = dp(MARGIN_DP)
+        params.width = widthPx + 2 * margin
+        card?.layoutParams = FrameLayout.LayoutParams(widthPx, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(margin, margin, margin, margin)
+        }
+        bar?.layoutParams = LinearLayout.LayoutParams(widthPx, dp(BAR_DP))
+        keysBox?.layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.WRAP_CONTENT)
+        footer?.layoutParams = LinearLayout.LayoutParams(widthPx, dp(FOOTER_DP))
+        buildKeys()
+        clampToScreen()
+    }
+
+    private fun minWidth() = dp(MIN_WIDTH_DP)
+
+    /** Ancho máximo: ≤ 95 % de la pantalla y sin salirse por la derecha desde [x]. */
+    private fun maxWidth(screenW: Int, x: Int) =
+        max(minWidth(), min((screenW * 0.95f).toInt(), screenW - x - 2 * dp(MARGIN_DP)))
+
+    private fun keyHeightPx() = ((widthPx - dp(8)) / 10f * KEY_ASPECT).toInt()
 
     /** Mientras este teclado está abierto, evita que se abra el del sistema (el del TV). */
     private fun hideSystemKeyboard() {
@@ -225,15 +301,15 @@ class OnScreenKeyboard(
         LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             for ((key, weight) in keys) {
-                addView(keyView(key), LinearLayout.LayoutParams(0, dp(KEY_DP), weight).apply { setMargins(dp(2), dp(2), dp(2), dp(2)) })
+                addView(keyView(key), LinearLayout.LayoutParams(0, keyHeightPx(), weight).apply { setMargins(dp(2), dp(2), dp(2), dp(2)) })
             }
         }
 
     private fun keyView(key: Key): View {
         val special = key !is Key.Text || key.value == " "
-        val normal = if (special) Color.rgb(189, 189, 189) else Color.rgb(250, 250, 250)
+        val normal = if (special) appearance.specialKeyColor else appearance.keyColor
         val bg = GradientDrawable().apply {
-            setColor(if (key == Key.ShiftKey && shift != Shift.OFF) Color.rgb(144, 202, 249) else normal)
+            setColor(if (key == Key.ShiftKey && shift != Shift.OFF) appearance.pressed(normal) else normal)
             cornerRadius = dp(6).toFloat()
         }
         val label = when (key) {
@@ -246,9 +322,9 @@ class OnScreenKeyboard(
         }
         return TextView(ctx).apply {
             text = label
-            textSize = 19f
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, keyHeightPx() * KEY_TEXT_RATIO)
             gravity = Gravity.CENTER
-            setTextColor(Color.BLACK)
+            setTextColor(appearance.keyTextColor)
             background = bg
             if (key == Key.Blank) return@apply
             val repeatTask = object : Runnable {
@@ -260,7 +336,7 @@ class OnScreenKeyboard(
             setOnTouchListener { _, e ->
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        bg.setColor(Color.rgb(144, 202, 249))
+                        bg.setColor(appearance.pressed(normal))
                         if (key == Key.Backspace) {
                             press(key)
                             main.postDelayed(repeatTask, REPEAT_DELAY_MS)
@@ -455,7 +531,11 @@ class OnScreenKeyboard(
         const val MARGIN_DP = 10
         const val MAX_WIDTH_DP = 720
         const val BAR_DP = 36
-        const val KEY_DP = 48
+        const val FOOTER_DP = 22
+        const val MIN_WIDTH_DP = 300
+        const val KEY_ASPECT = 0.675f
+        const val KEY_TEXT_RATIO = 0.4f
+        const val KEY_W = "kb_w"
         const val REPEAT_DELAY_MS = 400L
         const val REPEAT_MS = 60L
         const val KEY_X = "kb_x"

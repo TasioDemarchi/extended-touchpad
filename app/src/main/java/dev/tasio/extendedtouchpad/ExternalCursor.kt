@@ -16,11 +16,16 @@ import android.view.WindowManager
  * Cursor dibujado como overlay de accesibilidad en el display externo.
  * Las coordenadas (x, y) son la punta de la flecha, en píxeles del display externo.
  */
-class ExternalCursor(private val service: AccessibilityService) {
+class ExternalCursor(
+    private val service: AccessibilityService,
+    private val appearance: Appearance,
+) {
     private var wm: WindowManager? = null
     private var view: CursorView? = null
     private var lp: WindowManager.LayoutParams? = null
     private var updatePending = false
+    private var hotX = 0f
+    private var hotY = 0f
 
     var displayId = -1
         private set
@@ -44,8 +49,11 @@ class ExternalCursor(private val service: AccessibilityService) {
                 .createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
             val manager = ctx.getSystemService(WindowManager::class.java)
             val bounds = manager.currentWindowMetrics.bounds
-            val size = (CURSOR_DP * ctx.resources.displayMetrics.density).toInt()
-            val cursorView = CursorView(ctx)
+            val size = (appearance.cursorDp * ctx.resources.displayMetrics.density).toInt()
+            val cursorView = CursorView(ctx, appearance)
+            val (hx, hy) = CursorGlyph.hotspot(appearance.cursorShape, size.toFloat(), ctx.resources.displayMetrics.density)
+            hotX = hx
+            hotY = hy
             val params = WindowManager.LayoutParams(
                 size, size,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -61,8 +69,8 @@ class ExternalCursor(private val service: AccessibilityService) {
             height = bounds.height()
             x = width / 2f
             y = height / 2f
-            params.x = x.toInt()
-            params.y = y.toInt()
+            params.x = (x - hotX).toInt()
+            params.y = (y - hotY).toInt()
             manager.addView(cursorView, params)
 
             wm = manager
@@ -106,10 +114,13 @@ class ExternalCursor(private val service: AccessibilityService) {
         val params = lp ?: return
         x = (x + dx).coerceIn(0f, (width - 1).toFloat())
         y = (y + dy).coerceIn(0f, (height - 1).toFloat())
-        params.x = x.toInt()
-        params.y = y.toInt()
+        params.x = (x - hotX).toInt()
+        params.y = (y - hotY).toInt()
         scheduleUpdate()
     }
+
+    /** Devuelve el cursor a una posición guardada (tras reconstruirlo con otra apariencia). */
+    fun restorePosition(px: Float, py: Float) = moveBy(px - x, py - y)
 
     fun pulse() {
         view?.pulse()
@@ -135,23 +146,21 @@ class ExternalCursor(private val service: AccessibilityService) {
         }
     }
 
-    private class CursorView(context: Context) : View(context) {
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 1.5f * resources.displayMetrics.density
-            strokeJoin = Paint.Join.ROUND
-        }
-        private val arrow = Path()
+    private class CursorView(context: Context, private val appearance: Appearance) : View(context) {
+        private val shape = appearance.cursorShape
+        private val outline = appearance.cursorOutline
+        private val d = resources.displayMetrics.density
+        private var fill = appearance.cursorColor
 
-        init {
-            pivotX = 0f
-            pivotY = 0f
+        // El pulso de clic escala alrededor del punto de clic.
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            val (hx, hy) = CursorGlyph.hotspot(shape, w.toFloat(), d)
+            pivotX = hx
+            pivotY = hy
         }
 
         fun setDragging(dragging: Boolean) {
-            fill.color = if (dragging) Color.rgb(129, 199, 255) else Color.WHITE
+            fill = if (dragging) appearance.accent else appearance.cursorColor
             invalidate()
         }
 
@@ -163,24 +172,7 @@ class ExternalCursor(private val service: AccessibilityService) {
         }
 
         override fun onDraw(canvas: Canvas) {
-            val w = width.toFloat()
-            val h = height.toFloat()
-            val inset = stroke.strokeWidth
-            arrow.rewind()
-            arrow.moveTo(inset, inset)
-            arrow.lineTo(inset, h * 0.82f)
-            arrow.lineTo(w * 0.24f, h * 0.64f)
-            arrow.lineTo(w * 0.40f, h * 0.97f)
-            arrow.lineTo(w * 0.54f, h * 0.90f)
-            arrow.lineTo(w * 0.38f, h * 0.58f)
-            arrow.lineTo(w * 0.66f, h * 0.58f)
-            arrow.close()
-            canvas.drawPath(arrow, fill)
-            canvas.drawPath(arrow, stroke)
+            CursorGlyph.draw(canvas, width.toFloat(), d, shape, fill, outline)
         }
-    }
-
-    private companion object {
-        const val CURSOR_DP = 28
     }
 }
