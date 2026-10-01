@@ -413,24 +413,28 @@ class SettingsActivity : Activity() {
     // ---------------------------------------------------------------- tutorial de los mosaicos
 
     private fun tilesCard() = ui.card().apply {
-        addView(ui.cardTitle("Atajos en el centro de control", "Activa el touchpad o abre el teclado sin entrar a la app."))
+        addView(ui.cardTitle("Atajos en el centro de control", "Activa el touchpad, abre el teclado o cambia la salida de audio sin entrar a la app."))
         addView(tilePreview(), ui.params(ui.match, ui.wrap, top = 16))
         addView(ui.stepRow(1, "Agrégalos", "Toca un botón de abajo y acepta el aviso de Android."), ui.params(ui.match, ui.wrap, top = 18))
         addView(
-            ui.stepRow(2, "¿No aparece el aviso?", "Baja el centro de control, toca el lápiz (editar) y arrastra «Touchpad» y «Teclado» a la zona de arriba."),
+            ui.stepRow(2, "¿No aparece el aviso?", "Baja el centro de control, toca el lápiz (editar) y arrastra «Touchpad», «Teclado» y «Audio» a la zona de arriba."),
             ui.params(ui.match, ui.wrap, top = 16),
         )
         addView(
-            ui.stepRow(3, "Úsalos", "«Touchpad» lo activa o desactiva. «Teclado» lo abre o lo cierra, aunque el touchpad esté apagado."),
+            ui.stepRow(3, "Úsalos", "«Touchpad» lo activa o desactiva. «Teclado» lo abre o lo cierra, aunque el touchpad esté apagado. «Audio» pasa al siguiente dispositivo de salida (parlante interno, monitor, auriculares, Bluetooth…): cada toque, uno más, y vuelve a empezar. Muestra un instante el selector de audio del sistema mientras lo cambia."),
             ui.params(ui.match, ui.wrap, top = 16),
         )
         addView(ui.horizontal().apply {
             addView(ui.primaryButton("Agregar Touchpad") { requestAddTile(TouchpadTileService::class.java, "Touchpad", R.drawable.ic_touchpad_tile) }, ui.params(0, ui.wrap, weight = 1f, end = 6))
             addView(ui.primaryButton("Agregar Teclado") { requestAddTile(KeyboardTileService::class.java, "Teclado", R.drawable.ic_keyboard_tile) }, ui.params(0, ui.wrap, weight = 1f, start = 6))
         }, ui.params(ui.match, ui.wrap, top = 20))
+        addView(
+            ui.primaryButton("Agregar Audio") { requestAddTile(AudioOutputTileService::class.java, "Audio", R.drawable.ic_audio_wired) },
+            ui.params(ui.match, ui.wrap, top = 12),
+        )
     }
 
-    /** Maqueta de los dos mosaicos tal como se ven en el centro de control. */
+    /** Maqueta de los tres mosaicos tal como se ven en el centro de control. */
     private fun tilePreview() = ui.horizontal().apply {
         background = ui.shape(Palette.CARD_ALT, 16, Palette.STROKE)
         setPadding(ui.dp(14), ui.dp(14), ui.dp(14), ui.dp(14))
@@ -449,8 +453,9 @@ class SettingsActivity : Activity() {
                 addView(ui.text(state, 11f, if (on) Color.argb(200, 255, 255, 255) else Palette.TEXT3))
             })
         }
-        addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 8))
-        addView(tile(R.drawable.ic_keyboard_tile, "Teclado", "Cerrado", false), ui.params(0, ui.wrap, weight = 1f, start = 8))
+        addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 6))
+        addView(tile(R.drawable.ic_keyboard_tile, "Teclado", "Cerrado", false), ui.params(0, ui.wrap, weight = 1f, start = 6, end = 6))
+        addView(tile(R.drawable.ic_audio_wired, "Audio", "Parlante interno", false), ui.params(0, ui.wrap, weight = 1f, start = 6))
     }
 
     /** Pide a Android (13+) agregar un mosaico al centro de control. */

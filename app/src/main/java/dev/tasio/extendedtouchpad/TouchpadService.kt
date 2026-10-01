@@ -8,6 +8,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.graphics.Rect
 import android.os.Build
 import android.view.WindowManager
@@ -35,6 +38,13 @@ class TouchpadService : AccessibilityService() {
     private lateinit var keyboard: OnScreenKeyboard
     private lateinit var appearance: Appearance
     private lateinit var magnet: PanelMagnet
+    private lateinit var audioSwitcher: AudioOutputSwitcher
+
+    // El mosaico "Audio" muestra el dispositivo actual: se refresca al conectar o desconectar una salida de audio.
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = AudioOutputTileService.requestRefresh(this@TouchpadService)
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = AudioOutputTileService.requestRefresh(this@TouchpadService)
+    }
     private lateinit var settings: SharedPreferences
     private lateinit var remoteInput: RemoteInput
     private lateinit var keyguard: KeyguardManager
@@ -193,6 +203,8 @@ class TouchpadService : AccessibilityService() {
         magnet.keyboard = keyboard.magnetPanel
         panel.magnet = magnet
         keyboard.magnet = magnet
+        audioSwitcher = AudioOutputSwitcher(this, main)
+        getSystemService(AudioManager::class.java).registerAudioDeviceCallback(audioDeviceCallback, main)
         overlayType = OverlayLayer.panelType(this)
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
@@ -203,6 +215,7 @@ class TouchpadService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         Displays.manager(this).unregisterDisplayListener(displayListener)
         unregisterReceiver(screenReceiver)
+        getSystemService(AudioManager::class.java).unregisterAudioDeviceCallback(audioDeviceCallback)
         settings.unregisterOnSharedPreferenceChangeListener(settingsListener)
         main.removeCallbacks(rebuild)
         main.removeCallbacks(screenOnCheck)
@@ -297,6 +310,9 @@ class TouchpadService : AccessibilityService() {
             magnet.settle(panel.magnetPanel)
         }
     }
+
+    /** Pasa el audio al siguiente dispositivo de salida (mosaico «Audio»). */
+    fun cycleAudioOutput() = audioSwitcher.cycle()
 
     /** Abre la pantalla de ajustes de apariencia (tuerca del panel y del teclado). */
     private fun openSettings() {
