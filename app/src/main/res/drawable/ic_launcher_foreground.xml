@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primer plano del icono: un touchpad (rectángulo con su franja de botones) y un cursor en violeta encima. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="1.12"
+        android:scaleY="1.12">
+    <!-- Touchpad -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M38,33h32a6,6 0 0 1 6,6v24a6,6 0 0 1 -6,6H38a6,6 0 0 1 -6,-6V39a6,6 0 0 1 6,-6z"
+        android:strokeColor="#FFE8EAF2"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3.4" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,60h44M54,60v9"
+        android:strokeColor="#FFE8EAF2"
+        android:strokeLineCap="round"
+        android:strokeWidth="3.4" />
+    <!-- Cursor -->
+    <path
+        android:fillColor="#FFA99BFF"
+        android:pathData="M55,42L55,66L61,60.5L65,70L69.5,68L65.5,58.8L73.5,58.8Z"
+        android:strokeColor="#FF14162A"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2.2" />
+    </group>
+</vector>

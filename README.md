@@ -75,6 +75,10 @@ Por defecto los paneles son overlays de accesibilidad, que Android dibuja por en
 
 12 colores a elegir (azul, cian, verde azulado, verde, lima, amarillo, naranja, rojo, rosa, violeta, índigo y gris azulado), o el interruptor **Usar el color de la tablet**, que sigue el color de acento del sistema (paleta dinámica *Material You*, `android.R.color.system_accent1_500`, Android 12+). Se vuelve a leer al abrir la app y al encender o desbloquear la tablet, y los paneles se reconstruyen solos si cambia. El acento se usa en las teclas pulsadas, la tecla de mayúsculas activa, el icono de teclado o touchpad activo, el cursor mientras se arrastra y el icono de la pantalla de cambio de audio. Si Lenovo (ZUI) tuviera un color de acento propio distinto del de Android, este ajuste sigue el de Android.
 
+## Icono
+
+Icono adaptable (`res/mipmap-anydpi/ic_launcher*.xml`): un touchpad con un cursor violeta encima sobre un degradado azul oscuro-violeta, con capa monocroma para los iconos con tema de Android 13+. Fondo, primer plano y monocromo son vectores en `res/drawable/ic_launcher_*.xml`; el contenido está dentro de la zona segura (≈66 dp de 108) para que ninguna máscara lo recorte.
+
 ## Tema de la app
 
 La pantalla de ajustes tiene tema **oscuro** (por defecto), **claro** o **del sistema** (sigue el tema claro u oscuro de la tablet), en **Apariencia → Tema de la aplicación**. Es independiente del tema de los paneles. Además, **el color de acento elegido (o el de la tablet) se aplica también a la propia app**: botones, interruptores, deslizadores, marcas y selecciones. El color de texto sobre el acento se elige solo (casi negro con acentos muy claros, como el amarillo). `Palette` (en `Ui.kt`) calcula los colores al pedirlos; al cambiar de tema o de acento, `SettingsActivity.rebuildUi()` repinta la pantalla conservando el scroll. La cortina oscura del cambio de audio no cambia con el tema.
