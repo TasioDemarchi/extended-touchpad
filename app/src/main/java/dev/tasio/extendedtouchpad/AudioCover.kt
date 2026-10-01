@@ -142,6 +142,6 @@ class AudioCover(
         const val DRAW_MS = 60L
 
         /** Cuánto se queda visible el nombre del dispositivo nuevo, para poder leerlo. */
-        const val HOLD_MS = 1400L
+        const val HOLD_MS = 800L
     }
 }
