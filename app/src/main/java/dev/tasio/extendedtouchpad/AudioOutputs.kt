@@ -44,7 +44,9 @@ object AudioOutputs {
     fun current(context: Context): AudioDeviceInfo? {
         if (Build.VERSION.SDK_INT >= 33) {
             val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
-            manager(context).getAudioDevicesForAttributes(attributes).firstOrNull { it.type !in EXCLUDED }?.let { return it }
+            val routed = manager(context).getAudioDevicesForAttributes(attributes).filter { it.type !in EXCLUDED }
+            // Si el sistema devuelve varios, el inalámbrico es el que realmente suena.
+            (routed.firstOrNull { isWireless(it) } ?: routed.firstOrNull())?.let { return it }
         }
         return available(context).firstOrNull()
     }

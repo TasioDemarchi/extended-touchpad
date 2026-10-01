@@ -59,13 +59,26 @@ class AudioOutputSwitcher(
                 AudioOutputs.current(service)?.takeIf { it.id != before?.id }
             }) { changed ->
                 if (changed != null) {
-                    finish("Audio: ${AudioOutputs.displayName(changed)}")
+                    finishChanged(changed)
                 } else {
                     ProbeLog.add("Audio: el sistema no cambió el dispositivo")
                     finish("No se pudo cambiar el audio")
                 }
             }
         }, APPLY_DELAY_MS)
+    }
+
+    /** El audio cambió: se muestra el dispositivo nuevo un rato y se refresca el mosaico (también tras unos instantes). */
+    private fun finishChanged(device: android.media.AudioDeviceInfo) {
+        val name = AudioOutputs.displayName(device)
+        ProbeLog.add("Audio: resultado «$name» (tipo ${device.type}, inalámbrico=${AudioOutputs.isWireless(device)})")
+        AudioOutputTileService.requestRefresh(service)
+        cover.showResult(name, AudioOutputs.iconRes(device)) {
+            AudioOutputTileService.requestRefresh(service)
+            // El sistema puede tardar en informar el dispositivo nuevo: se vuelve a refrescar un momento después.
+            handler.postDelayed({ AudioOutputTileService.requestRefresh(service) }, 1200)
+            busy = false
+        }
     }
 
     private fun finish(message: String) {

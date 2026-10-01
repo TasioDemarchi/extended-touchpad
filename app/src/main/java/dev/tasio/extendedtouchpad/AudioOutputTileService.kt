@@ -45,6 +45,7 @@ class AudioOutputTileService : TileService() {
     private fun refresh() {
         val tile = qsTile ?: return
         val device = AudioOutputs.current(this)
+        ProbeLog.add("Mosaico Audio: dispositivo=${AudioOutputs.displayName(device)} tipo=${device?.type} inalámbrico=${AudioOutputs.isWireless(device)}")
         tile.label = "Audio"
         tile.subtitle = AudioOutputs.displayName(device)
         tile.icon = Icon.createWithResource(this, AudioOutputs.iconRes(device))

@@ -1,21 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Salida de audio inalámbrica: una onda de sonido junto al símbolo de Bluetooth. El sistema lo tiñe. -->
+<!-- Salida inalámbrica: parlante con su onda de sonido y, a la derecha, el símbolo de Bluetooth. El sistema lo tiñe. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Parlante -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M2,9.2h3.2L9.6,5.4v13.2L5.2,14.8H2z" />
+    <!-- Onda de sonido -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M3.5,10v4M7,7v10M10.5,9v6"
+        android:pathData="M11.6,9.2a3.6,3.6 0 0 1 0,5.6"
         android:strokeColor="#FFFFFF"
         android:strokeLineCap="round"
-        android:strokeWidth="2" />
+        android:strokeWidth="1.6" />
+    <!-- Símbolo de Bluetooth -->
     <group
-        android:scaleX="0.62"
-        android:scaleY="0.62"
+        android:scaleX="0.68"
+        android:scaleY="0.68"
         android:translateX="11.2"
-        android:translateY="5.4">
+        android:translateY="3.9">
         <path
             android:fillColor="#FFFFFF"
             android:pathData="M17.71,7.71L12,2h-1v7.59L6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 11,14.41V22h1l5.71,-5.71 -4.3,-4.29 4.3,-4.29zM13,5.83l1.88,1.88L13,9.59V5.83zM14.88,16.29L13,18.17v-3.76l1.88,1.88z" />
