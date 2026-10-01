@@ -9,6 +9,8 @@ class Appearance(private val prefs: SharedPreferences) {
     val accent: Int get() = prefs.getInt(KEY_ACCENT, ACCENTS.first())
     val cursorDp: Int get() = prefs.getInt(KEY_CURSOR_DP, DEFAULT_CURSOR_DP)
     val cursorShape: CursorShape get() = CursorShape.fromName(prefs.getString(KEY_CURSOR_SHAPE, null))
+    /** Si está activo, el panel del touchpad y el teclado se imantan entre sí. */
+    val magnet: Boolean get() = prefs.getBoolean(KEY_MAGNET, false)
     val cursorColor: Int get() = prefs.getInt(KEY_CURSOR_COLOR, CURSOR_COLORS.first())
 
     /** Opacidad en porcentaje (20–100). */
@@ -48,6 +50,7 @@ class Appearance(private val prefs: SharedPreferences) {
             .apply()
     }
 
+    fun setMagnet(value: Boolean) = prefs.edit().putBoolean(KEY_MAGNET, value).apply()
     fun setDark(value: Boolean) = prefs.edit().putBoolean(KEY_DARK, value).apply()
     fun setAccent(value: Int) = prefs.edit().putInt(KEY_ACCENT, value).apply()
     fun setCursorDp(value: Int) = prefs.edit().putInt(KEY_CURSOR_DP, value.coerceIn(MIN_CURSOR_DP, MAX_CURSOR_DP)).apply()
@@ -55,6 +58,7 @@ class Appearance(private val prefs: SharedPreferences) {
     fun setCursorColor(value: Int) = prefs.edit().putInt(KEY_CURSOR_COLOR, value).apply()
 
     companion object {
+        const val KEY_MAGNET = "ap_magnet"
         const val KEY_DARK = "ap_dark"
         const val KEY_ACCENT = "ap_accent"
         const val KEY_CURSOR_DP = "ap_cursor_dp"

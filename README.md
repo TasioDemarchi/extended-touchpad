@@ -29,6 +29,17 @@ La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Ag
 - **Touchpad:** activa y desactiva el touchpad. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad).
 - **Teclado:** abre y cierra el teclado. Muestra Abierto, Cerrado, Sin pantalla externa o Servicio apagado. No depende del touchpad.
 
+## Imán entre paneles
+
+En **Apariencia → Imantar los paneles** (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. Una vez pegados:
+
+- Si cambia el tamaño de cualquiera de los dos (asa de la esquina, ancho del teclado o fila de números), el acoplado se vuelve a pegar y centrar al instante.
+- Arrastrar uno de los dos los separa; se sueltan al alejarse más de 24 dp, y el otro no sigue.
+- Se mantienen pegados al reabrir el teclado (las posiciones se guardan) y al girar la tablet. Si ya no caben pegados por ese lado, se desacoplan.
+- Con el imán activo no se aplica la colocación que aparta el teclado del panel: se pegan en vez de repelerse.
+
+Los paneles no llevan sombra y su ventana es exactamente su tarjeta, por lo que quedan borde con borde sin superponerse. Constantes: `SNAP_DP` y `RELEASE_DP` en `PanelMagnet.kt`, duración del deslizamiento en `WindowMover.kt`.
+
 ## Apariencia
 
 En la app, **Apariencia** (o la tuerca del panel): transparencia del panel y del teclado, tema claro/oscuro, color de acento y cursor (forma, tamaño y color). Los cambios se aplican en vivo. La transparencia y el tema también se cambian desde el panel y el teclado.
@@ -61,7 +72,6 @@ Tras un Enter en el teclado, la vista previa se vacía y la siguiente letra empi
 - Fuera de alcance por ahora: lanzador de apps propio, clic derecho y teclas de navegación.
 - Apps o pantallas protegidas (DRM, pantallas de seguridad) pueden ignorar los gestos de accesibilidad.
 - Con un teclado de la tablet (el del sistema) no es posible: cada escritura en el TV le quita el foco y lo cierra. Por eso se usa un teclado propio sin foco.
-- Un margen transparente de ~10 dp alrededor del panel (para la sombra) captura toques.
 
 ## Compilar
 

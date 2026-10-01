@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
+import android.graphics.Rect
 import android.os.Build
+import android.view.WindowManager
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityWindowInfo
 import android.os.Handler
@@ -29,6 +31,7 @@ class TouchpadService : AccessibilityService() {
     private var suppressAutoOpenUntil = 0L
     private lateinit var keyboard: OnScreenKeyboard
     private lateinit var appearance: Appearance
+    private lateinit var magnet: PanelMagnet
     private lateinit var settings: SharedPreferences
     private lateinit var remoteInput: RemoteInput
     private lateinit var keyguard: KeyguardManager
@@ -70,6 +73,7 @@ class TouchpadService : AccessibilityService() {
     // espera para agrupar los cambios de un deslizador).
     private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
+            Appearance.KEY_MAGNET -> main.post { onMagnetSettingChanged() }
             Appearance.KEY_PAD_OPACITY -> panel.applyAlpha()
             Appearance.KEY_KB_OPACITY -> keyboard.applyAlpha()
             Appearance.KEY_DARK, Appearance.KEY_ACCENT, Appearance.KEY_CURSOR_DP, Appearance.KEY_CURSOR_COLOR,
@@ -170,8 +174,21 @@ class TouchpadService : AccessibilityService() {
             panel.onKeyboardStateChanged()
         }
         panel = TouchpadPanel(this, settings, appearance, panelListener)
-        panel.onSettled = { keyboard.avoidPanel() }
+        panel.onSettled = { onPanelSettled() }
         panel.keyboardState = { keyboard.isShown }
+        magnet = PanelMagnet(
+            screen = {
+                val margin = (PanelMagnet.CARD_MARGIN_DP * resources.displayMetrics.density).toInt()
+                val bounds = getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
+                Rect(bounds.left + margin, bounds.top + margin, bounds.right - margin, bounds.bottom - margin)
+            },
+            density = resources.displayMetrics.density,
+            enabled = { appearance.magnet },
+        )
+        magnet.touchpad = panel.magnetPanel
+        magnet.keyboard = keyboard.magnetPanel
+        panel.magnet = magnet
+        keyboard.magnet = magnet
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
@@ -250,6 +267,19 @@ class TouchpadService : AccessibilityService() {
 
     val isKeyboardShown: Boolean get() = keyboard.isShown
 
+    /** El panel se movió, cambió de tamaño o apareció: con el imán se acopla al teclado; si no, el teclado se aparta. */
+    private fun onPanelSettled() {
+        if (appearance.magnet) magnet.settle(panel.magnetPanel) else keyboard.avoidPanel()
+    }
+
+    private fun onMagnetSettingChanged() {
+        if (!appearance.magnet) {
+            magnet.clear()
+        } else if (panel.isShown && keyboard.isShown) {
+            magnet.settle(panel.magnetPanel)
+        }
+    }
+
     /** Abre la pantalla de ajustes de apariencia (tuerca del panel y del teclado). */
     private fun openSettings() {
         startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -307,7 +337,7 @@ class TouchpadService : AccessibilityService() {
         } else {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
             // Si el panel aparece con el teclado ya abierto (se activó el touchpad), el teclado se aparta.
-            if (panel.show() && keyboard.isShown) keyboard.avoidPanel()
+            if (panel.show() && keyboard.isShown) onPanelSettled()
         }
         // El teclado se mantiene con el touchpad desactivado; solo se cierra sin pantalla externa o con bloqueo.
         if (external == null || locked) keyboard.hide() else keyboard.relayout()

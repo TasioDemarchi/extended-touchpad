@@ -45,6 +45,15 @@ class SettingsActivity : Activity() {
         title("Apariencia")
         note("Los cambios se ven al instante en el panel, el teclado y el cursor si el touchpad está activo.")
 
+        section("Paneles")
+        val magnetSwitch = android.widget.Switch(this).apply {
+            text = "Imantar los paneles"
+            isChecked = appearance.magnet
+            setOnCheckedChangeListener { _, checked -> appearance.setMagnet(checked) }
+        }
+        content.addView(magnetSwitch)
+        note("Cuando el panel del touchpad y el teclado están cerca, se pegan por el borde, centrados. Si cambias el tamaño de uno, el otro se vuelve a centrar. Arrastra uno lejos para separarlos.")
+
         section("Transparencia del panel")
         opacitySlider(
             get = { appearance.padOpacity },

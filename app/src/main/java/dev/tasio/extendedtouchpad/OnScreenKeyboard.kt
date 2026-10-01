@@ -70,6 +70,47 @@ class OnScreenKeyboard(
     /** Si está activa, las letras llevan encima una fila de números. Se recuerda entre aperturas. */
     private val numberRow: Boolean get() = prefs.getBoolean(KEY_NUMBERS, false)
 
+    /** Imán entre los dos paneles; lo pone el servicio. */
+    var magnet: PanelMagnet? = null
+
+    val magnetPanel = object : MagnetPanel {
+        override fun cardRect(): android.graphics.Rect? {
+            val params = lp ?: return null
+            val r = root ?: return null
+            r.measure(
+                View.MeasureSpec.makeMeasureSpec(params.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            val m = dp(MARGIN_DP)
+            return android.graphics.Rect(params.x + m, params.y + m, params.x + params.width - m, params.y + r.measuredHeight - m)
+        }
+
+        override fun moveCardTo(x: Int, y: Int, animate: Boolean) {
+            mover.moveTo(x - dp(MARGIN_DP), y - dp(MARGIN_DP), animate)
+        }
+
+        override fun persistPosition() {
+            val params = lp ?: return
+            prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
+        }
+    }
+
+    // Mueve la ventana de golpe o deslizando (acoplamiento del imán).
+    private val mover = WindowMover(
+        current = { lp?.let { android.graphics.Point(it.x, it.y) } },
+        apply = { x, y ->
+            lp?.let { params ->
+                params.x = x
+                params.y = y
+                clampToScreen()
+            }
+        },
+    )
+
+    // Posición de la ventana que marca el dedo al arrastrar, sin el efecto del imán.
+    private var rawX = 0
+    private var rawY = 0
+
     /** Estado del touchpad (activado o no) y acción para activarlo o desactivarlo; los pone el servicio. */
     var touchpadState: () -> Boolean = { false }
     var onTouchpadToggle: () -> Unit = {}
@@ -160,7 +201,6 @@ class OnScreenKeyboard(
                 cornerRadius = dp(14).toFloat()
             }
             clipToOutline = true
-            elevation = dp(8).toFloat()
             addView(barHolder, LinearLayout.LayoutParams(width, dp(BAR_DP)))
             addView(keys, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(grip, LinearLayout.LayoutParams(width, dp(FOOTER_DP)))
@@ -209,6 +249,7 @@ class OnScreenKeyboard(
         refreshPreview()
         placeAwayFromPanel()
         clampToScreen()
+        if (appearance.magnet) magnet?.settle(magnetPanel)
         hideSystemKeyboard()
         onVisibilityChanged?.invoke()
     }
@@ -243,6 +284,7 @@ class OnScreenKeyboard(
     }
 
     fun hide() {
+        mover.cancel()
         main.removeCallbacks(closeSlider)
         val r = root ?: return
         try {
@@ -271,6 +313,10 @@ class OnScreenKeyboard(
     /** Recoloca el teclado si tapa el panel (tras mover o redimensionar el panel, o redimensionar el teclado). */
     fun avoidPanel() {
         if (!isShown) return
+        if (appearance.magnet) {
+            magnet?.settle(magnetPanel)
+            return
+        }
         placeAwayFromPanel()
         clampToScreen()
     }
@@ -281,6 +327,7 @@ class OnScreenKeyboard(
      * La posición guardada no se toca: el ajuste es solo para esta apertura.
      */
     private fun placeAwayFromPanel() {
+        if (appearance.magnet) return // con el imán no se repelen: se pegan
         val params = lp ?: return
         val r = root ?: return
         val panel = panelBounds() ?: return
@@ -346,6 +393,7 @@ class OnScreenKeyboard(
         } else {
             clampToScreen()
         }
+        magnet?.reapply()
     }
 
     private fun applyWidth(params: WindowManager.LayoutParams) {
@@ -359,6 +407,7 @@ class OnScreenKeyboard(
         footer?.layoutParams = LinearLayout.LayoutParams(widthPx, dp(FOOTER_DP))
         buildKeys()
         clampToScreen()
+        magnet?.reapply()
     }
 
     private fun minWidth() = dp(MIN_WIDTH_DP)
@@ -627,18 +676,37 @@ class OnScreenKeyboard(
                 MotionEvent.ACTION_DOWN -> {
                     lastX = e.rawX
                     lastY = e.rawY
+                    lp?.let {
+                        rawX = it.x
+                        rawY = it.y
+                    }
+                    magnet?.onDragStart()
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     val params = lp ?: return@setOnTouchListener true
-                    params.x += (e.rawX - lastX).toInt()
-                    params.y += (e.rawY - lastY).toInt()
+                    val r = root ?: return@setOnTouchListener true
+                    val bounds = wm.maximumWindowMetrics.bounds
+                    r.measure(
+                        View.MeasureSpec.makeMeasureSpec(params.width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    )
+                    rawX = (rawX + (e.rawX - lastX).toInt()).coerceIn(0, max(0, bounds.width() - params.width))
+                    rawY = (rawY + (e.rawY - lastY).toInt()).coerceIn(0, max(0, bounds.height() - r.measuredHeight))
                     lastX = e.rawX
                     lastY = e.rawY
-                    clampToScreen()
+                    val snapper = magnet
+                    if (snapper != null) {
+                        val m = dp(MARGIN_DP)
+                        val p = snapper.dragPosition(magnetPanel, rawX + m, rawY + m)
+                        mover.moveTo(p.x - m, p.y - m, animate = snapper.dragStateChanged)
+                    } else {
+                        mover.moveTo(rawX, rawY, animate = false)
+                    }
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> lp?.let {
+                    magnet?.onDragEnd(magnetPanel)
                     prefs.edit().putInt(KEY_X, it.x).putInt(KEY_Y, it.y).apply()
                 }
             }
@@ -665,7 +733,7 @@ class OnScreenKeyboard(
     private fun dp(v: Int) = (v * density).toInt()
 
     private companion object {
-        const val MARGIN_DP = 10
+        const val MARGIN_DP = PanelMagnet.CARD_MARGIN_DP
         const val MAX_WIDTH_DP = 720
         const val BAR_DP = 36
         const val SLIDER_TIMEOUT_MS = 3000L

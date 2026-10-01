@@ -75,6 +75,44 @@ class TouchpadPanel(
         footerView?.invalidate()
     }
 
+    /** Imán entre los dos paneles; lo pone el servicio. */
+    var magnet: PanelMagnet? = null
+
+    val magnetPanel = object : MagnetPanel {
+        override fun cardRect(): android.graphics.Rect? {
+            val params = lp ?: return null
+            val m = dp(MARGIN_DP)
+            return android.graphics.Rect(params.x + m, params.y + m, params.x + params.width - m, params.y + params.height - m)
+        }
+
+        override fun moveCardTo(x: Int, y: Int, animate: Boolean) {
+            mover.moveTo(x - dp(MARGIN_DP), y - dp(MARGIN_DP), animate)
+        }
+
+        override fun persistPosition() {
+            val params = lp ?: return
+            prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
+        }
+    }
+
+    // Mueve la ventana de golpe o deslizando (acoplamiento del imán).
+    private val mover = WindowMover(
+        current = { lp?.let { android.graphics.Point(it.x, it.y) } },
+        apply = { x, y ->
+            lp?.let { params ->
+                val bounds = wm.maximumWindowMetrics.bounds
+                params.x = x
+                params.y = y
+                clamp(params, bounds.width(), bounds.height())
+                updateWindow(params)
+            }
+        },
+    )
+
+    // Posición de la ventana que marca el dedo al arrastrar, sin el efecto del imán.
+    private var rawX = 0
+    private var rawY = 0
+
     /** Se invoca al terminar de mover o redimensionar el panel (para que el teclado se aparte si lo tapa). */
     var onSettled: (() -> Unit)? = null
 
@@ -102,6 +140,7 @@ class TouchpadPanel(
             override fun onDragEnd() = listener.onDragEnd()
         })
         val handle = HandleView(service, appearance, object : HandleView.Callbacks {
+            override fun onDragStart() = dragStart()
             override fun onDrag(dx: Float, dy: Float) = dragBy(dx, dy)
             override fun onDragEnd() = savePosition()
             override fun onOpacity() = showOpacitySlider()
@@ -135,7 +174,6 @@ class TouchpadPanel(
                 cornerRadius = dp(14).toFloat()
             }
             clipToOutline = true
-            elevation = dp(8).toFloat()
             addView(handleHolder, LinearLayout.LayoutParams(padWidth, dp(HANDLE_DP)))
             addView(pad, LinearLayout.LayoutParams(padWidth, padHeight))
             addView(footer, LinearLayout.LayoutParams(padWidth, dp(FOOTER_DP)))
@@ -207,6 +245,7 @@ class TouchpadPanel(
     }
 
     fun hide() {
+        mover.cancel()
         main.removeCallbacks(closeSlider)
         val r = root ?: return
         try {
@@ -232,6 +271,7 @@ class TouchpadPanel(
         applySize(params)
         clamp(params, bounds.width(), bounds.height())
         updateWindow(params)
+        magnet?.reapply()
     }
 
     // ---------------------------------------------------------------- tamaño
@@ -251,6 +291,7 @@ class TouchpadPanel(
         padHeight = (padHeight + dy.toInt()).coerceIn(minHeight(), maxHeight(bounds.height(), params.y))
         applySize(params)
         updateWindow(params)
+        magnet?.reapply()
     }
 
     private fun applySize(params: WindowManager.LayoutParams) {
@@ -281,13 +322,26 @@ class TouchpadPanel(
 
     // ---------------------------------------------------------------- posición
 
+    private fun dragStart() {
+        val params = lp ?: return
+        rawX = params.x
+        rawY = params.y
+        magnet?.onDragStart()
+    }
+
     private fun dragBy(dx: Float, dy: Float) {
         val params = lp ?: return
         val bounds = wm.maximumWindowMetrics.bounds
-        params.x += dx.toInt()
-        params.y += dy.toInt()
-        clamp(params, bounds.width(), bounds.height())
-        updateWindow(params)
+        rawX = (rawX + dx.toInt()).coerceIn(0, max(0, bounds.width() - params.width))
+        rawY = (rawY + dy.toInt()).coerceIn(0, max(0, bounds.height() - params.height))
+        val snapper = magnet
+        if (snapper != null) {
+            val m = dp(MARGIN_DP)
+            val p = snapper.dragPosition(magnetPanel, rawX + m, rawY + m)
+            mover.moveTo(p.x - m, p.y - m, animate = snapper.dragStateChanged)
+        } else {
+            mover.moveTo(rawX, rawY, animate = false)
+        }
     }
 
     private fun updateWindow(params: WindowManager.LayoutParams) {
@@ -299,6 +353,7 @@ class TouchpadPanel(
 
     private fun savePosition() {
         val params = lp ?: return
+        magnet?.onDragEnd(magnetPanel)
         prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
         onSettled?.invoke()
     }
@@ -454,6 +509,7 @@ class TouchpadPanel(
         private val cb: Callbacks,
     ) : View(context) {
         interface Callbacks {
+            fun onDragStart()
             fun onDrag(dx: Float, dy: Float)
             fun onDragEnd()
             fun onOpacity()
@@ -573,6 +629,7 @@ class TouchpadPanel(
                     zone = zoneAt(e.x)
                     lastRawX = e.rawX
                     lastRawY = e.rawY
+                    if (zone == Zone.DRAG) cb.onDragStart()
                 }
 
                 MotionEvent.ACTION_MOVE -> if (zone == Zone.DRAG) {
@@ -602,7 +659,7 @@ class TouchpadPanel(
     }
 
     private companion object {
-        const val MARGIN_DP = 10
+        const val MARGIN_DP = PanelMagnet.CARD_MARGIN_DP
         const val SLIDER_TIMEOUT_MS = 3000L
         const val HANDLE_DP = 36
         const val FOOTER_DP = 28
