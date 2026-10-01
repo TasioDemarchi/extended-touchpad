@@ -2,6 +2,7 @@ package dev.tasio.extendedtouchpad
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -14,20 +15,58 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 
-/** Paleta de la app: grises azulados y violetas oscuros. */
+/**
+ * Paleta de la app: grises azulados en tema oscuro o claro, con el color de acento elegido. Se configura con [configure]
+ * antes de pintar la pantalla; los colores se calculan al pedirlos, así que cambiar de tema o de acento solo exige volver a
+ * construir las vistas. Los nombres VIOLET y VIOLET_DEEP vienen del acento original y ahora siguen al acento elegido.
+ */
 object Palette {
-    val BG = Color.parseColor("#0F1117")
-    val CARD = Color.parseColor("#171A23")
-    val CARD_ALT = Color.parseColor("#202433")
-    val STROKE = Color.parseColor("#2A2F40")
-    val TEXT = Color.parseColor("#E8EAF2")
-    val TEXT2 = Color.parseColor("#9CA3B8")
-    val TEXT3 = Color.parseColor("#6B7289")
-    val VIOLET = Color.parseColor("#9A8CF8")
-    val VIOLET_DEEP = Color.parseColor("#5B4BC4")
-    val BLUE = Color.parseColor("#6E9BF2")
-    val TEAL = Color.parseColor("#55BBA8")
-    val AMBER = Color.parseColor("#DDA84A")
+    private var dark = true
+    private var accent = Color.rgb(154, 140, 248)
+
+    fun configure(context: Context, appearance: Appearance) {
+        dark = when (appearance.appTheme) {
+            Appearance.APP_THEME_LIGHT -> false
+            Appearance.APP_THEME_SYSTEM ->
+                (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            else -> true
+        }
+        accent = appearance.accent
+    }
+
+    val isDark get() = dark
+
+    /** Cambia cuando cambia el tema o el acento: sirve para saber si hay que volver a pintar. */
+    val signature get() = "$dark/$accent"
+
+    val BG get() = if (dark) Color.parseColor("#0F1117") else Color.parseColor("#F3F4F8")
+    val CARD get() = if (dark) Color.parseColor("#171A23") else Color.parseColor("#FFFFFF")
+    val CARD_ALT get() = if (dark) Color.parseColor("#202433") else Color.parseColor("#ECEEF5")
+    val STROKE get() = if (dark) Color.parseColor("#2A2F40") else Color.parseColor("#D9DCE8")
+    val TEXT get() = if (dark) Color.parseColor("#E8EAF2") else Color.parseColor("#1B1E2B")
+    val TEXT2 get() = if (dark) Color.parseColor("#9CA3B8") else Color.parseColor("#50566B")
+    val TEXT3 get() = if (dark) Color.parseColor("#6B7289") else Color.parseColor("#7A8096")
+
+    /** Acento para texto, interruptores y deslizadores: algo más claro sobre fondo oscuro y más oscuro sobre claro. */
+    val VIOLET get() = if (dark) mix(accent, Color.WHITE, 0.18f) else mix(accent, Color.BLACK, 0.18f)
+
+    /** Relleno de los botones y elementos seleccionados. */
+    val VIOLET_DEEP get() = if (dark) mix(accent, Color.BLACK, 0.22f) else accent
+
+    /** Color legible sobre [VIOLET_DEEP] (blanco, o casi negro si el acento es muy claro, como el amarillo). */
+    val ON_ACCENT get() = if (luminance(VIOLET_DEEP) > 150) Color.parseColor("#14161F") else Color.WHITE
+
+    val BLUE get() = Color.parseColor("#6E9BF2")
+    val TEAL get() = Color.parseColor("#55BBA8")
+    val AMBER get() = if (dark) Color.parseColor("#DDA84A") else Color.parseColor("#B9801C")
+
+    private fun luminance(c: Int) = 0.299f * Color.red(c) + 0.587f * Color.green(c) + 0.114f * Color.blue(c)
+
+    private fun mix(a: Int, b: Int, t: Float) = Color.rgb(
+        (Color.red(a) * (1 - t) + Color.red(b) * t).toInt(),
+        (Color.green(a) * (1 - t) + Color.green(b) * t).toInt(),
+        (Color.blue(a) * (1 - t) + Color.blue(b) * t).toInt(),
+    )
 }
 
 /** Constructores de las piezas de la pantalla de configuración (minimalista, oscura). */
@@ -91,7 +130,7 @@ class Ui(val ctx: Context) {
     fun primaryButton(label: String, onClick: () -> Unit) = TextView(ctx).apply {
         text = label
         textSize = 14f
-        setTextColor(Color.WHITE)
+        setTextColor(Palette.ON_ACCENT)
         setTypeface(typeface, Typeface.BOLD)
         gravity = Gravity.CENTER
         minHeight = dp(46)
@@ -135,7 +174,7 @@ class Ui(val ctx: Context) {
                     val on = intArrayOf(android.R.attr.state_checked)
                     val off = intArrayOf()
                     thumbTintList = ColorStateList(arrayOf(on, off), intArrayOf(Palette.VIOLET, Palette.TEXT3))
-                    trackTintList = ColorStateList(arrayOf(on, off), intArrayOf(Color.argb(110, 154, 140, 248), Palette.STROKE))
+                    trackTintList = ColorStateList(arrayOf(on, off), intArrayOf(Color.argb(110, Color.red(Palette.VIOLET), Color.green(Palette.VIOLET), Color.blue(Palette.VIOLET)), Palette.STROKE))
                     setOnCheckedChangeListener { _, value -> onChange(value) }
                 },
             )
@@ -180,7 +219,7 @@ class Ui(val ctx: Context) {
             textSize = 13f
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(if (done) Palette.BG else Palette.VIOLET)
+            setTextColor(if (done) Color.parseColor("#0F1117") else Palette.VIOLET)
             background = if (done) shape(Palette.TEAL, 14) else shape(Palette.CARD_ALT, 14, Palette.VIOLET_DEEP)
         }
         addView(badge, params(dp(28), dp(28), end = 14))

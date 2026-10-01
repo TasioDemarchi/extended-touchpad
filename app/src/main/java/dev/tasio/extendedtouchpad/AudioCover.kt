@@ -39,18 +39,17 @@ class AudioCover(
         }
         try {
             val image = ImageView(service).apply {
-                setColorFilter(Palette.VIOLET)
                 visibility = View.GONE
             }
             // Mientras trabaja el selector por debajo la pantalla queda oscura y vacía; el nombre llega con el resultado.
             val name = TextView(service).apply {
                 textSize = 22f
-                setTextColor(Palette.TEXT2)
+                setTextColor(COVER_TEXT2)
                 gravity = Gravity.CENTER
             }
             val small = TextView(service).apply {
                 textSize = 14f
-                setTextColor(Palette.TEXT3)
+                setTextColor(COVER_TEXT3)
                 gravity = Gravity.CENTER
                 visibility = View.GONE
             }
@@ -62,7 +61,7 @@ class AudioCover(
                 addView(small, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             }
             val cover = FrameLayout(service).apply {
-                setBackgroundColor(Palette.BG)
+                setBackgroundColor(COVER_BG)
                 setPadding(dp(24), 0, dp(24), 0)
                 addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
@@ -110,7 +109,7 @@ class AudioCover(
         title?.apply {
             text = name
             textSize = 30f
-            setTextColor(Palette.TEXT)
+            setTextColor(COVER_TEXT)
         }
         caption?.apply {
             text = "Salida de audio"
@@ -138,6 +137,11 @@ class AudioCover(
     }
 
     private companion object {
+        // La cortina es siempre oscura, sea cual sea el tema de la app.
+        val COVER_BG = android.graphics.Color.parseColor("#0F1117")
+        val COVER_TEXT = android.graphics.Color.parseColor("#E8EAF2")
+        val COVER_TEXT2 = android.graphics.Color.parseColor("#9CA3B8")
+        val COVER_TEXT3 = android.graphics.Color.parseColor("#6B7289")
         const val FAILSAFE_MS = 6000L
         const val DRAW_MS = 60L
 

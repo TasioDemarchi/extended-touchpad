@@ -7,6 +7,9 @@ import android.graphics.Color
 /** Apariencia configurable del panel, el teclado y el cursor. Se lee de las preferencias al construir las vistas. */
 class Appearance(private val prefs: SharedPreferences) {
     val dark: Boolean get() = prefs.getBoolean(KEY_DARK, false)
+    /** Tema de la propia app (pantalla de ajustes): oscuro, claro o el del sistema. Los paneles tienen el suyo. */
+    val appTheme: String get() = prefs.getString(KEY_APP_THEME, APP_THEME_DARK) ?: APP_THEME_DARK
+
     /** Si está activo, el acento es el color de la tablet (Material You) en lugar de uno elegido a mano. */
     val useSystemAccent: Boolean get() = prefs.getBoolean(KEY_ACCENT_SYSTEM, false)
 
@@ -54,7 +57,7 @@ class Appearance(private val prefs: SharedPreferences) {
 
     fun resetAll() {
         prefs.edit()
-            .remove(KEY_DARK).remove(KEY_ACCENT).remove(KEY_ACCENT_SYSTEM).remove(KEY_CURSOR_DP).remove(KEY_CURSOR_COLOR).remove(KEY_CURSOR_SHAPE)
+            .remove(KEY_DARK).remove(KEY_ACCENT).remove(KEY_ACCENT_SYSTEM).remove(KEY_APP_THEME).remove(KEY_CURSOR_DP).remove(KEY_CURSOR_COLOR).remove(KEY_CURSOR_SHAPE)
             .remove(KEY_PAD_OPACITY).remove(KEY_KB_OPACITY)
             .apply()
     }
@@ -62,6 +65,7 @@ class Appearance(private val prefs: SharedPreferences) {
     fun setMagnet(value: Boolean) = prefs.edit().putBoolean(KEY_MAGNET, value).apply()
     fun setDark(value: Boolean) = prefs.edit().putBoolean(KEY_DARK, value).apply()
     fun setAccent(value: Int) = prefs.edit().putInt(KEY_ACCENT, value).putBoolean(KEY_ACCENT_SYSTEM, false).apply()
+    fun setAppTheme(value: String) = prefs.edit().putString(KEY_APP_THEME, value).apply()
     fun setUseSystemAccent(value: Boolean) = prefs.edit().putBoolean(KEY_ACCENT_SYSTEM, value).apply()
 
     /**
@@ -83,6 +87,10 @@ class Appearance(private val prefs: SharedPreferences) {
         const val KEY_DARK = "ap_dark"
         const val KEY_ACCENT = "ap_accent"
         const val KEY_ACCENT_SYSTEM = "ap_accent_system"
+        const val KEY_APP_THEME = "ap_app_theme"
+        const val APP_THEME_DARK = "dark"
+        const val APP_THEME_LIGHT = "light"
+        const val APP_THEME_SYSTEM = "system"
         const val KEY_SYSTEM_ACCENT_COLOR = "ap_system_accent"
         const val KEY_CURSOR_DP = "ap_cursor_dp"
         const val KEY_CURSOR_COLOR = "ap_cursor_color"

@@ -31,6 +31,8 @@ import android.widget.Toast
  */
 class SettingsActivity : Activity() {
     private lateinit var ui: Ui
+    private lateinit var scroll: ScrollView
+    private lateinit var content: LinearLayout
     private lateinit var appearance: Appearance
 
     private lateinit var chipsHolder: LinearLayout
@@ -56,8 +58,9 @@ class SettingsActivity : Activity() {
         appearance = Appearance(getSharedPreferences("touchpad", MODE_PRIVATE))
         appearance.refreshSystemAccent(this)
 
-        val content = ui.vertical().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)) }
-        val scroll = ScrollView(this).apply {
+        Palette.configure(this, appearance)
+        content = ui.vertical().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)) }
+        scroll = ScrollView(this).apply {
             setBackgroundColor(Palette.BG)
             isVerticalScrollBarEnabled = false
             addView(content)
@@ -69,7 +72,31 @@ class SettingsActivity : Activity() {
             }
         }
         setContentView(scroll)
+        applyPalette()
+        buildContent()
+    }
 
+    /** Fondo y color de los iconos de la barra de estado según el tema de la app. */
+    private fun applyPalette() {
+        scroll.setBackgroundColor(Palette.BG)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Palette.BG))
+        window.insetsController?.setSystemBarsAppearance(
+            if (Palette.isDark) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+        )
+    }
+
+    /** Cambió el tema de la app o el acento: se repinta toda la pantalla sin perder el punto de scroll. */
+    private fun rebuildUi() {
+        Palette.configure(this, appearance)
+        val y = scroll.scrollY
+        applyPalette()
+        buildContent()
+        scroll.post { scroll.scrollTo(0, y) }
+    }
+
+    private fun buildContent() {
+        content.removeAllViews()
         chipsHolder = ui.horizontal().apply { gravity = Gravity.START }
         setupHolder = ui.card()
         keepAliveHolder = ui.card()
@@ -123,6 +150,9 @@ class SettingsActivity : Activity() {
         super.onResume()
         // El servicio puede haberse activado en Ajustes, y la transparencia también se cambia desde los paneles.
         appearance.refreshSystemAccent(this)
+        val before = Palette.signature
+        Palette.configure(this, appearance)
+        if (Palette.signature != before) rebuildUi()
         TouchpadService.instance?.refreshOverlayLayer() // por si se concedió el permiso «Mostrar sobre otras apps»
         refreshDynamic()
         renderAppearance()
@@ -446,13 +476,13 @@ class SettingsActivity : Activity() {
             addView(
                 ImageView(this@SettingsActivity).apply {
                     setImageResource(icon)
-                    setColorFilter(if (on) Color.WHITE else Palette.TEXT2)
+                    setColorFilter(if (on) Palette.ON_ACCENT else Palette.TEXT2)
                 },
                 ui.params(ui.dp(22), ui.dp(22), end = 10),
             )
             addView(ui.vertical().apply {
-                addView(ui.text(name, 13f, if (on) Color.WHITE else Palette.TEXT, bold = true))
-                addView(ui.text(state, 11f, if (on) Color.argb(200, 255, 255, 255) else Palette.TEXT3))
+                addView(ui.text(name, 13f, if (on) Palette.ON_ACCENT else Palette.TEXT, bold = true))
+                addView(ui.text(state, 11f, if (on) Palette.ON_ACCENT else Palette.TEXT3))
             })
         }
         addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 6))
@@ -508,7 +538,12 @@ class SettingsActivity : Activity() {
         }, ui.params(ui.match, ui.wrap, top = 10))
 
         appearanceHolder.addView(ui.card().apply {
-            addView(ui.cardTitle("Tema y color de los paneles"))
+            addView(ui.cardTitle("Tema de la aplicación", "Solo cambia esta pantalla de ajustes. «Sistema» sigue el tema claro u oscuro de la tablet."))
+            addView(appThemeSegments(), ui.params(ui.match, ui.wrap, top = 16))
+        }, ui.params(ui.match, ui.wrap, top = 10))
+
+        appearanceHolder.addView(ui.card().apply {
+            addView(ui.cardTitle("Tema y color de los paneles", "El color de acento también se usa en esta pantalla."))
             addView(themeSegments(), ui.params(ui.match, ui.wrap, top = 16))
             addView(ui.text("Color de acento", 15f), ui.params(ui.match, ui.wrap, top = 20))
             addView(
@@ -516,7 +551,7 @@ class SettingsActivity : Activity() {
                     "Usar el color de la tablet",
                     "Sigue el color de acento del sistema (Material You) y se actualiza solo si cambia.",
                     appearance.useSystemAccent,
-                ) { appearance.setUseSystemAccent(it); renderAppearance() },
+                ) { appearance.setUseSystemAccent(it); rebuildUi() },
                 ui.params(ui.match, ui.wrap, top = 10),
             )
             if (appearance.useSystemAccent) {
@@ -528,7 +563,7 @@ class SettingsActivity : Activity() {
                     ui.params(ui.match, ui.wrap, top = 8),
                 )
             } else {
-                addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); renderAppearance() }, ui.params(ui.match, ui.wrap, top = 8))
+                addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); rebuildUi() }, ui.params(ui.match, ui.wrap, top = 8))
             }
         }, gap())
 
@@ -554,20 +589,41 @@ class SettingsActivity : Activity() {
         appearanceHolder.post { appearanceHolder.minimumHeight = 0 }
     }
 
-    private fun themeSegments(): LinearLayout = ui.horizontal().apply {
+    /** Selector de opciones en una sola fila (segmentos). */
+    private fun segments(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit): LinearLayout = ui.horizontal().apply {
         background = ui.shape(Palette.CARD_ALT, 14, Palette.STROKE)
         setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4))
-        fun segment(label: String, selected: Boolean, onClick: () -> Unit) = TextView(this@SettingsActivity).apply {
-            text = label
-            textSize = 14f
-            gravity = Gravity.CENTER
-            minHeight = ui.dp(40)
-            setTextColor(if (selected) Color.WHITE else Palette.TEXT2)
-            if (selected) background = ui.shape(Palette.VIOLET_DEEP, 11)
-            setOnClickListener { onClick() }
+        for ((value, label) in options) {
+            val isSelected = value == selected
+            addView(
+                TextView(this@SettingsActivity).apply {
+                    text = label
+                    textSize = 14f
+                    gravity = Gravity.CENTER
+                    minHeight = ui.dp(40)
+                    setTextColor(if (isSelected) Palette.ON_ACCENT else Palette.TEXT2)
+                    if (isSelected) background = ui.shape(Palette.VIOLET_DEEP, 11)
+                    setOnClickListener { onPick(value) }
+                },
+                ui.params(0, ui.wrap, weight = 1f),
+            )
         }
-        addView(segment("Claro", !appearance.dark) { appearance.setDark(false); renderAppearance() }, ui.params(0, ui.wrap, weight = 1f))
-        addView(segment("Oscuro", appearance.dark) { appearance.setDark(true); renderAppearance() }, ui.params(0, ui.wrap, weight = 1f))
+    }
+
+    /** Tema de los paneles (claro u oscuro). */
+    private fun themeSegments(): LinearLayout =
+        segments(listOf("light" to "Claro", "dark" to "Oscuro"), if (appearance.dark) "dark" else "light") {
+            appearance.setDark(it == "dark")
+            renderAppearance()
+        }
+
+    /** Tema de la propia app: oscuro, claro o el del sistema. */
+    private fun appThemeSegments(): LinearLayout = segments(
+        listOf(Appearance.APP_THEME_DARK to "Oscuro", Appearance.APP_THEME_LIGHT to "Claro", Appearance.APP_THEME_SYSTEM to "Sistema"),
+        appearance.appTheme,
+    ) {
+        appearance.setAppTheme(it)
+        rebuildUi()
     }
 
     /** Muestras de color en filas de 6, para que no se salgan de la tarjeta. */
