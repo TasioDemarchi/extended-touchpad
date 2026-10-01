@@ -14,7 +14,7 @@ import android.widget.Toast
 
 /**
  * Pantalla oscura a pantalla completa mientras el selector de audio del sistema se abre, se toca y se cierra por debajo
- * (así el diálogo no se ve). Primero dice «Cambiando de dispositivo de audio…» y, al terminar, muestra el icono y el nombre
+ * (así el diálogo no se ve). Primero queda oscura y vacía y, al terminar, muestra el icono y el nombre
  * del dispositivo nuevo durante un rato para que se pueda leer. No recibe toques y se retira sola si algo se cuelga.
  */
 class AudioCover(
@@ -42,8 +42,8 @@ class AudioCover(
                 setColorFilter(Palette.VIOLET)
                 visibility = View.GONE
             }
+            // Mientras trabaja el selector por debajo la pantalla queda oscura y vacía; el nombre llega con el resultado.
             val name = TextView(service).apply {
-                text = "Cambiando de dispositivo de audio…"
                 textSize = 22f
                 setTextColor(Palette.TEXT2)
                 gravity = Gravity.CENTER
