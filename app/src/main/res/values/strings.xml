@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Extended Touchpad</string>
+    <string name="service_description">Dibuja un cursor en la pantalla externa y envía toques a ella desde un touchpad en la tablet.</string>
+</resources>
