@@ -24,15 +24,15 @@ class AudioOutputSwitcher(
     private class Dialog(val current: Row, val others: List<Row>, val done: AccessibilityNodeInfo?)
 
     private var busy = false
-    private val freeze = ScreenFreeze(service, handler)
+    private val cover = AudioCover(service, handler)
 
     fun cycle() {
         if (busy) return
         busy = true
         val before = AudioOutputs.current(service)
         ProbeLog.add("Audio: abriendo el selector del sistema (actual: ${AudioOutputs.displayName(before)})")
-        // La pantalla se congela con una captura mientras el selector del sistema trabaja por debajo, para que no se vea.
-        freeze.show {
+        // Una pantalla oscura con una leyenda tapa el selector del sistema mientras trabaja por debajo, para que no se vea.
+        cover.show {
             openSystemDialog(service)
             poll(attempts = POLL_ATTEMPTS, delayMs = POLL_MS, probe = ::findDialog) { dialog -> onDialog(dialog, before) }
         }
@@ -69,7 +69,7 @@ class AudioOutputSwitcher(
     }
 
     private fun finish(message: String) {
-        freeze.hide()
+        cover.hide()
         ProbeLog.add("Audio: resultado «$message» (ahora: ${AudioOutputs.displayName(AudioOutputs.current(service))})")
         Toast.makeText(service, message, Toast.LENGTH_SHORT).show()
         AudioOutputTileService.requestRefresh(service)
