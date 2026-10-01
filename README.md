@@ -14,7 +14,7 @@ Al conectar el HDMI en modo extendido, el cursor aparece en el TV y el panel gri
 - **Dos dedos en vertical:** scroll (un único trazo continuo en el TV).
 - **Tap y, sin soltar, apoyar de nuevo y mover (dentro de ~300 ms):** arrastre. El cursor se pone azul. Manteniéndolo quieto antes de mover se activa el long-press de la app (por ejemplo, para mover íconos del launcher).
 - **Barra superior del panel:** arrastrar para moverlo; la **X** lo cierra. Se vuelve a abrir con **Activar touchpad** en la app.
-- **Icono de teclado (izquierda de la barra):** abre un teclado flotante en la tablet que escribe en el campo de texto enfocado del TV. Primero toca el campo con el cursor.
+- **Teclado:** al enfocar o tocar un campo de texto en el TV se abre solo un teclado flotante en la tablet (se puede desactivar con **Desactivar teclado automático** en la app). También se abre a mano con el **icono de teclado** a la izquierda de la barra del panel.
 
 ## Teclado
 
@@ -23,7 +23,7 @@ Teclado propio (QWERTY con ñ, mayúsculas, símbolos, borrar con repetición, E
 - Requiere el permiso de accesibilidad de **leer el contenido de ventanas** (para encontrar el campo enfocado en el TV).
 - En campos de contraseña Android no entrega el texto real, así que el teclado lleva su propio registro de lo escrito.
 - Sin corrector, dictado ni flechas/Tab. Apps que dibujan su propio campo de texto (algunos juegos) no lo aceptan.
-- El teclado del sistema del TV se sigue abriendo al tocar un campo; no se oculta.
+- Mientras el teclado propio está abierto se oculta el teclado del sistema (`SoftKeyboardController`, `SHOW_MODE_HIDDEN`), también en el TV, y se restaura al cerrarlo. El teclado del TV puede asomar ~0,5 s antes de esconderse, porque la orden llega cuando el TV ya empezó a abrirlo. Con el teclado propio abierto tampoco aparece el teclado del sistema en apps de la tablet.
 
 Constantes de sensibilidad: `MOVE_SCALE` y `SCROLL_GAIN` en `TouchpadService.kt`, `MAX_ACCEL` en `TouchpadPanel.kt`, tiempos del scroll en `GestureInjector.kt`.
 

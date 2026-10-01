@@ -85,11 +85,14 @@ class TouchpadService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Foco en un campo de otra app (no la barra del teclado, que es de este paquete).
-        if (event?.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED && event.packageName?.toString() != packageName) {
-            if (cursor.isAttached) remoteInput.remember(event.source, cursor.displayId)
-            keyboard.onRemoteFocusChanged()
-        }
+        event ?: return
+        val type = event.eventType
+        if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED && type != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        // Ignora los eventos de este paquete (el teclado propio y el panel).
+        if (event.packageName?.toString() == packageName || !cursor.isAttached) return
+        val onExternalField = remoteInput.remember(event.source, cursor.displayId)
+        if (onExternalField && isTouchpadEnabled && isAutoOpenKeyboard && !keyboard.isShown) keyboard.show()
+        keyboard.onRemoteFocusChanged()
     }
 
     override fun onInterrupt() = Unit
@@ -97,6 +100,14 @@ class TouchpadService : AccessibilityService() {
     var isTouchpadEnabled: Boolean
         get() = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_ENABLED, true)
         private set(value) = getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, value).apply()
+
+    var isAutoOpenKeyboard: Boolean
+        get() = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_KEYBOARD, true)
+        private set(value) = getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUTO_KEYBOARD, value).apply()
+
+    fun toggleAutoOpenKeyboard() {
+        isAutoOpenKeyboard = !isAutoOpenKeyboard
+    }
 
     fun setEnabled(enabled: Boolean) {
         isTouchpadEnabled = enabled
@@ -141,6 +152,7 @@ class TouchpadService : AccessibilityService() {
     companion object {
         private const val PREFS = "touchpad"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_AUTO_KEYBOARD = "auto_keyboard"
 
         /** Px del display externo por px del panel, a velocidad lenta, relativo a ancho_externo/ancho_panel. */
         private const val MOVE_SCALE = 0.5f

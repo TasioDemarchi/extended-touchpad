@@ -32,6 +32,8 @@ class OnScreenKeyboard(
     private enum class Shift { OFF, ONCE, LOCK }
 
     private val ctx = service
+    private val softKeyboard = service.softKeyboardController
+    private var previousShowMode: Int? = null
     private val wm = service.getSystemService(WindowManager::class.java)
     private val density = service.resources.displayMetrics.density
     private val main = Handler(Looper.getMainLooper())
@@ -132,6 +134,7 @@ class OnScreenKeyboard(
         buildKeys()
         refreshPreview()
         clampToScreen()
+        hideSystemKeyboard()
     }
 
     fun hide() {
@@ -146,6 +149,22 @@ class OnScreenKeyboard(
         preview = null
         passwordNode = null
         passwordBuffer.clear()
+        restoreSystemKeyboard()
+    }
+
+    /** Mientras este teclado está abierto, evita que se abra el del sistema (el del TV). */
+    private fun hideSystemKeyboard() {
+        if (previousShowMode != null) return
+        val current = softKeyboard.showMode
+        val ok = softKeyboard.setShowMode(AccessibilityService.SHOW_MODE_HIDDEN)
+        if (ok) previousShowMode = current
+        ProbeLog.add("Teclado del sistema oculto: ${if (ok) "sí" else "el sistema rechazó el cambio"}")
+    }
+
+    private fun restoreSystemKeyboard() {
+        val previous = previousShowMode ?: return
+        previousShowMode = null
+        softKeyboard.setShowMode(previous)
     }
 
     /** Cambió el foco en alguna ventana: actualiza la vista previa con el campo nuevo. */

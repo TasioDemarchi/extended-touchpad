@@ -15,10 +15,15 @@ class RemoteInput(private val service: AccessibilityService) {
     var lastDiagnosis = ""
         private set
 
-    /** Llamar con el origen de cada evento de foco. Guarda el nodo si es un campo editable del display externo. */
-    fun remember(source: AccessibilityNodeInfo?, displayId: Int) {
-        if (source == null || !source.isEditable) return
-        if (isOnDisplay(source, displayId)) lastFocused = source
+    /**
+     * Llamar con el origen de cada evento de foco o clic. Si es un campo editable del display externo
+     * lo guarda y devuelve true.
+     */
+    fun remember(source: AccessibilityNodeInfo?, displayId: Int): Boolean {
+        if (source == null || !source.isEditable) return false
+        if (!isOnDisplay(source, displayId)) return false
+        lastFocused = source
+        return true
     }
 
     fun focusedInput(displayId: Int): AccessibilityNodeInfo? {

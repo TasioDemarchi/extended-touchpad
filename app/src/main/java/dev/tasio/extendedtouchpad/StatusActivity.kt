@@ -43,6 +43,7 @@ class StatusActivity : Activity() {
 
         click(R.id.btn_settings) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         click(R.id.btn_toggle) { withService { it.setEnabled(!it.isTouchpadEnabled) } }
+        click(R.id.btn_auto_keyboard) { withService { it.toggleAutoOpenKeyboard(); refresh() } }
         click(R.id.btn_test_tap) { withService { it.testTapCenter() } }
     }
 
@@ -77,6 +78,8 @@ class StatusActivity : Activity() {
         val service = TouchpadService.instance
         findViewById<Button>(R.id.btn_toggle).text =
             if (service?.isTouchpadEnabled == false) "Activar touchpad" else "Desactivar touchpad"
+        findViewById<Button>(R.id.btn_auto_keyboard).text =
+            if (service?.isAutoOpenKeyboard == false) "Activar teclado automático" else "Desactivar teclado automático"
         status.text = buildString {
             appendLine("Servicio de accesibilidad: ${if (TouchpadService.instance != null) "ACTIVO" else "inactivo"}")
             appendLine("Touchpad: ${if (service?.isTouchpadEnabled == true) "activado" else "desactivado"}")
