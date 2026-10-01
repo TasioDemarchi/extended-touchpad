@@ -48,6 +48,7 @@ class OnScreenKeyboard(
     private var card: LinearLayout? = null
     private var bar: View? = null // contenedor de la barra superior (barra normal + barra de transparencia)
     private var normalBar: View? = null
+    private var touchpadIcon: View? = null
     private var opacitySlider: View? = null
     private val closeSlider = Runnable { hideOpacitySlider() }
     private var footer: View? = null
@@ -68,6 +69,13 @@ class OnScreenKeyboard(
 
     /** Si está activa, las letras llevan encima una fila de números. Se recuerda entre aperturas. */
     private val numberRow: Boolean get() = prefs.getBoolean(KEY_NUMBERS, false)
+
+    /** Estado del touchpad (activado o no) y acción para activarlo o desactivarlo; los pone el servicio. */
+    var touchpadState: () -> Boolean = { false }
+    var onTouchpadToggle: () -> Unit = {}
+
+    /** Abre los ajustes de apariencia de la app; lo pone el servicio. */
+    var onOpenSettings: () -> Unit = {}
 
     /** Se invoca al abrirse o cerrarse el teclado (para actualizar el mosaico del centro de control). */
     var onVisibilityChanged: (() -> Unit)? = null
@@ -93,6 +101,8 @@ class OnScreenKeyboard(
         val opacityBtn = OpacityIconView(ctx, appearance).apply {
             setOnClickListener { showOpacitySlider() }
         }
+        val touchpadBtn = TouchpadIconView(ctx, appearance) { touchpadState() }
+        touchpadBtn.setOnClickListener { onTouchpadToggle() }
         val numbersBtn = NumberRowIconView(ctx, appearance) { numberRow }
         numbersBtn.setOnClickListener {
             prefs.edit().putBoolean(KEY_NUMBERS, !numberRow).apply()
@@ -100,6 +110,7 @@ class OnScreenKeyboard(
             buildKeys()
             avoidPanel() // el teclado crece o se encoge una fila: se recoloca si pasa a tapar el panel
         }
+        val settingsBtn = SettingsIconView(ctx, appearance).apply { setOnClickListener { onOpenSettings() } }
         val closeBtn = TextView(ctx).apply {
             text = "✕"
             textSize = 18f
@@ -111,9 +122,11 @@ class OnScreenKeyboard(
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(appearance.barColor)
             addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
-            addView(opacityBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
-            addView(numbersBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
-            addView(closeBtn, LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(touchpadBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(opacityBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(numbersBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(settingsBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(closeBtn, LinearLayout.LayoutParams(dp(ICON_DP), LinearLayout.LayoutParams.MATCH_PARENT))
         }
         installDrag(title)
         val slider = OpacitySliderView(
@@ -187,6 +200,7 @@ class OnScreenKeyboard(
         card = cardView
         this.bar = barHolder
         normalBar = bar
+        touchpadIcon = touchpadBtn
         opacitySlider = slider
         footer = grip
         shift = Shift.OFF
@@ -197,6 +211,11 @@ class OnScreenKeyboard(
         clampToScreen()
         hideSystemKeyboard()
         onVisibilityChanged?.invoke()
+    }
+
+    /** El touchpad se activó o desactivó: refresca el icono. */
+    fun onTouchpadStateChanged() {
+        touchpadIcon?.invalidate()
     }
 
     /** Aplica la opacidad actual sin reconstruir el teclado. */
@@ -237,6 +256,7 @@ class OnScreenKeyboard(
         card = null
         bar = null
         normalBar = null
+        touchpadIcon = null
         opacitySlider = null
         footer = null
         passwordNode = null
@@ -650,7 +670,8 @@ class OnScreenKeyboard(
         const val BAR_DP = 36
         const val SLIDER_TIMEOUT_MS = 3000L
         const val FOOTER_DP = 22
-        const val MIN_WIDTH_DP = 300
+        const val MIN_WIDTH_DP = 340
+        const val ICON_DP = 42
         const val KEY_ASPECT = 0.675f
         const val KEY_TEXT_RATIO = 0.4f
         const val KEY_W = "kb_w"

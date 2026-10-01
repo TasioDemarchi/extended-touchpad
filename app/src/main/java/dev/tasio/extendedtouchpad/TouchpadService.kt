@@ -133,9 +133,7 @@ class TouchpadService : AccessibilityService() {
 
         override fun onKeyboard() = toggleKeyboard()
 
-        override fun onSettings() {
-            startActivity(Intent(this@TouchpadService, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        override fun onSettings() = openSettings()
 
         override fun onClose() = setEnabled(false)
     }
@@ -162,13 +160,18 @@ class TouchpadService : AccessibilityService() {
             registerReceiver(screenReceiver, screenFilter)
         }
         keyboard = OnScreenKeyboard(this, remoteInput, settings, appearance, { panel.bounds() }) { externalDisplayId() }
+        keyboard.onOpenSettings = { openSettings() }
+        keyboard.touchpadState = { isTouchpadEnabled }
+        keyboard.onTouchpadToggle = { setEnabled(!isTouchpadEnabled) }
         keyboard.onVisibilityChanged = {
             // Tras cerrar el teclado no se reabre solo al instante (el teclado del TV puede seguir en pantalla).
             if (!keyboard.isShown) suppressAutoOpenUntil = SystemClock.uptimeMillis() + AUTO_OPEN_PAUSE_MS
             KeyboardTileService.requestRefresh(this)
+            panel.onKeyboardStateChanged()
         }
         panel = TouchpadPanel(this, settings, appearance, panelListener)
         panel.onSettled = { keyboard.avoidPanel() }
+        panel.keyboardState = { keyboard.isShown }
         Displays.manager(this).registerDisplayListener(displayListener, main)
         ProbeLog.add("Servicio de accesibilidad conectado")
         sync()
@@ -247,6 +250,11 @@ class TouchpadService : AccessibilityService() {
 
     val isKeyboardShown: Boolean get() = keyboard.isShown
 
+    /** Abre la pantalla de ajustes de apariencia (tuerca del panel y del teclado). */
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     /** Abre o cierra el teclado a mano (icono del panel y mosaico del centro de control). */
     fun toggleKeyboard() {
         if (!isKeyboardAvailable()) {
@@ -272,6 +280,7 @@ class TouchpadService : AccessibilityService() {
     fun setEnabled(enabled: Boolean) {
         isTouchpadEnabled = enabled
         sync()
+        keyboard.onTouchpadStateChanged()
         TouchpadTileService.requestRefresh(this)
     }
 

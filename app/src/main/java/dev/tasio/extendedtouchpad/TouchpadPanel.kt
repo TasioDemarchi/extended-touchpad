@@ -67,6 +67,14 @@ class TouchpadPanel(
 
     val isShown get() = root != null
 
+    /** Estado del teclado (abierto o no), para resaltar su icono; lo pone el servicio. */
+    var keyboardState: () -> Boolean = { false }
+
+    /** El teclado se abrió o se cerró: refresca el icono de la franja inferior. */
+    fun onKeyboardStateChanged() {
+        footerView?.invalidate()
+    }
+
     /** Se invoca al terminar de mover o redimensionar el panel (para que el teclado se aparte si lo tapa). */
     var onSettled: (() -> Unit)? = null
 
@@ -118,7 +126,7 @@ class TouchpadPanel(
         val footer = ResizeGripView(service, appearance, object : ResizeGripView.Callbacks {
             override fun onResize(dx: Float, dy: Float) = resizeBy(dx, dy)
             override fun onResizeEnd() = saveSize()
-        }, onKeyboard = { listener.onKeyboard() })
+        }, onKeyboard = { listener.onKeyboard() }, keyboardActive = { keyboardState() })
 
         val cardView = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL

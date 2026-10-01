@@ -13,6 +13,8 @@ class ResizeGripView(
     private val cb: Callbacks,
     /** Si no es null, se dibuja un icono de teclado a la izquierda de la franja que ejecuta esta acción al tocarlo. */
     private val onKeyboard: (() -> Unit)? = null,
+    /** Si el teclado está abierto, el icono se resalta con el color de acento. */
+    private val keyboardActive: () -> Boolean = { false },
 ) : View(context) {
     interface Callbacks {
         /** Desplazamiento en px desde el último evento (positivo = más grande). */
@@ -27,12 +29,7 @@ class ResizeGripView(
         strokeWidth = 2f * d
         strokeCap = Paint.Cap.ROUND
     }
-    private val keyRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = appearance.textColor
-        style = Paint.Style.STROKE
-        strokeWidth = 1.5f * d
-    }
-    private val keyDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.subtleColor }
+    private val keyboardGlyph = KeyboardGlyph(appearance, d)
     private var lastX = 0f
     private var lastY = 0f
     private enum class Zone { NONE, KEYBOARD, RESIZE }
@@ -46,18 +43,7 @@ class ResizeGripView(
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPaint(bg)
-        if (onKeyboard != null) {
-            // Icono de teclado: rectángulo con tres filas de teclas.
-            val kx = keyboardZone() / 2f
-            val cy = height / 2f
-            val kw = 10f * d
-            val kh = 6.5f * d
-            canvas.drawRoundRect(kx - kw, cy - kh, kx + kw, cy + kh, 2f * d, 2f * d, keyRing)
-            for (row in -1..1) {
-                val ry = cy + row * 3f * d
-                for (col in -2..2) canvas.drawPoint(kx + col * 3.6f * d, ry, keyDot)
-            }
-        }
+        if (onKeyboard != null) keyboardGlyph.draw(canvas, keyboardZone() / 2f, height / 2f, keyboardActive())
         // Tres rayas diagonales en la esquina inferior derecha.
         val right = width - 8f * d
         val bottom = height - 5f * d

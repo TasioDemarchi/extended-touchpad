@@ -13,8 +13,8 @@ android {
         applicationId = "dev.tasio.extendedtouchpad"
         minSdk = 32
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.3.0"
+        versionCode = 6
+        versionName = "0.3.1"
     }
 
     buildTypes {
