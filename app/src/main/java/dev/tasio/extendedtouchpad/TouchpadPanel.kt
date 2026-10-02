@@ -93,6 +93,17 @@ class TouchpadPanel(
             val params = lp ?: return
             prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
         }
+
+        override fun bringToFront() {
+            val view = root ?: return
+            val params = lp ?: return
+            mover.cancel()
+            try {
+                wm.removeView(view)
+            } catch (_: Throwable) {
+            }
+            wm = OverlayLayer.addWithFallback(service, view, params, wm)
+        }
     }
 
     // Mueve la ventana de golpe o deslizando (acoplamiento del imán).
@@ -112,6 +123,9 @@ class TouchpadPanel(
     // Posición de la ventana que marca el dedo al arrastrar, sin el efecto del imán.
     private var rawX = 0
     private var rawY = 0
+
+    /** El usuario terminó de tocar el panel (el servicio decide si hay que traerlo al frente). */
+    var onTouched: (() -> Unit)? = null
 
     /** Se invoca al terminar de mover o redimensionar el panel (para que el teclado se aparte si lo tapa). */
     var onSettled: (() -> Unit)? = null
@@ -181,7 +195,8 @@ class TouchpadPanel(
             addView(pad, LinearLayout.LayoutParams(padWidth, padHeight))
             addView(footer, LinearLayout.LayoutParams(padWidth, dp(FOOTER_DP)))
         }
-        val container = FrameLayout(service).apply {
+        val container = TouchEndFrameLayout(service).apply {
+            onTouchEnd = { onTouched?.invoke() }
             alpha = appearance.padOpacity / 100f
             addView(cardView, FrameLayout.LayoutParams(padWidth, totalHeight()).apply { setMargins(margin, margin, margin, margin) })
         }
@@ -336,7 +351,8 @@ class TouchpadPanel(
         val params = lp ?: return
         val bounds = wm.maximumWindowMetrics.bounds
         rawX = (rawX + dx.toInt()).coerceIn(0, max(0, bounds.width() - params.width))
-        rawY = (rawY + dy.toInt()).coerceIn(0, max(0, bounds.height() - params.height))
+        val top = ScreenInsets.top(service, wm)
+        rawY = (rawY + dy.toInt()).coerceIn(top, max(top, bounds.height() - params.height))
         val snapper = magnet
         if (snapper != null) {
             val m = dp(MARGIN_DP)
@@ -363,7 +379,9 @@ class TouchpadPanel(
 
     private fun clamp(params: WindowManager.LayoutParams, screenW: Int, screenH: Int) {
         params.x = params.x.coerceIn(0, max(0, screenW - params.width))
-        params.y = params.y.coerceIn(0, max(0, screenH - params.height))
+        // Nunca por encima de la barra de estado: ahí no se podría volver a tocar para moverlo.
+        val top = ScreenInsets.top(service, wm)
+        params.y = params.y.coerceIn(top, max(top, screenH - params.height))
     }
 
     private fun dp(v: Int) = (v * density).toInt()

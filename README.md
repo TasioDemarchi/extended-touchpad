@@ -83,6 +83,11 @@ Icono adaptable (`res/mipmap-anydpi/ic_launcher*.xml`): un touchpad con un curso
 
 La pantalla de ajustes tiene tema **oscuro** (por defecto), **claro** o **del sistema** (sigue el tema claro u oscuro de la tablet), en **Apariencia → Tema de la aplicación**. Es independiente del tema de los paneles. Además, **el color de acento elegido (o el de la tablet) se aplica también a la propia app**: botones, interruptores, deslizadores, marcas y selecciones. El color de texto sobre el acento se elige solo (casi negro con acentos muy claros, como el amarillo). `Palette` (en `Ui.kt`) calcula los colores al pedirlos; al cambiar de tema o de acento, `SettingsActivity.rebuildUi()` repinta la pantalla conservando el scroll. La cortina oscura del cambio de audio no cambia con el tema.
 
+## Límite superior y orden de los paneles
+
+- **Los paneles no pueden subir por encima de la barra de estado** (`ScreenInsets.top`, altura de la barra de estado o del recorte de la cámara). Como están en una capa por debajo de la barra de estado, si quedaran detrás no se podría volver a tocar su barra para moverlos. El límite se aplica al arrastrar, al abrir, al girar la tablet, a las posiciones guardadas y al imán.
+- **El panel que tocas se trae al frente** si se solapa con el otro. Android ordena las ventanas por el orden en que se añadieron, así que se quita y se vuelve a añadir su ventana (`MagnetPanel.bringToFront`) **al soltar el dedo** (`TouchEndFrameLayout`), porque hacerlo con el dedo apoyado cortaría el gesto. Si no se solapan, no se toca nada. `TouchpadService.frontPanel` recuerda cuál está delante.
+
 ## Imán entre paneles
 
 Con el interruptor **Imantar los paneles** de la app (desactivado por defecto). Con el imán activo, cuando el panel del touchpad y el teclado se acercan a menos de 12 dp por cualquier lado (izquierda, derecha, arriba o abajo) se pegan por el borde, **centrados** sobre el borde compartido, con un deslizamiento corto. El imán solo actúa en el **tramo central de cada lado** (el centro del panel que arrastras debe quedar a ±30 % del largo del lado respecto al centro de ese lado): cerca de las esquinas no se pega por ningún lado, para que no salte de uno a otro. Una vez pegados:

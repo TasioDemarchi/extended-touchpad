@@ -12,6 +12,7 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.graphics.Rect
+import kotlin.math.max
 import android.os.Build
 import android.view.WindowManager
 import android.os.SystemClock
@@ -188,17 +189,22 @@ class TouchpadService : AccessibilityService() {
         keyboard.onVisibilityChanged = {
             // Tras cerrar el teclado no se reabre solo al instante (el teclado del TV puede seguir en pantalla).
             if (!keyboard.isShown) suppressAutoOpenUntil = SystemClock.uptimeMillis() + AUTO_OPEN_PAUSE_MS
+            if (keyboard.isShown) frontPanel = keyboard.magnetPanel // el teclado recién abierto queda delante
             KeyboardTileService.requestRefresh(this)
             panel.onKeyboardStateChanged()
         }
         panel = TouchpadPanel(this, settings, appearance, panelListener)
         panel.onSettled = { onPanelSettled() }
         panel.keyboardState = { keyboard.isShown }
+        panel.onTouched = { raiseIfOverlapped(panel.magnetPanel) }
+        keyboard.onTouched = { raiseIfOverlapped(keyboard.magnetPanel) }
         magnet = PanelMagnet(
             screen = {
                 val margin = (PanelMagnet.CARD_MARGIN_DP * resources.displayMetrics.density).toInt()
                 val bounds = getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
-                Rect(bounds.left + margin, bounds.top + margin, bounds.right - margin, bounds.bottom - margin)
+                // Por arriba, nunca dentro de la barra de estado.
+                val top = max(margin, ScreenInsets.top(this, getSystemService(WindowManager::class.java)))
+                Rect(bounds.left + margin, bounds.top + top, bounds.right - margin, bounds.bottom - margin)
             },
             density = resources.displayMetrics.density,
             enabled = { appearance.magnet },
@@ -315,6 +321,26 @@ class TouchpadService : AccessibilityService() {
         }
     }
 
+    // Último panel que quedó delante: el que se añade o se trae al frente es el de arriba.
+    private var frontPanel: MagnetPanel? = null
+
+    /**
+     * Si el panel tocado se solapa con el otro y no es el que está delante, se trae al frente. Si no se solapan no hace
+     * falta tocar nada (así no hay parpadeos innecesarios).
+     */
+    private fun raiseIfOverlapped(touched: MagnetPanel) {
+        val other = if (touched === panel.magnetPanel) keyboard.magnetPanel else panel.magnetPanel
+        val a = touched.cardRect() ?: return
+        val b = other.cardRect()
+        if (b == null || !Rect.intersects(a, b)) {
+            frontPanel = touched
+            return
+        }
+        if (frontPanel === touched) return
+        frontPanel = touched
+        touched.bringToFront()
+    }
+
     /** Pasa el audio al siguiente dispositivo de salida (mosaico «Audio»). */
     fun cycleAudioOutput() = audioSwitcher.cycle()
 
@@ -375,7 +401,9 @@ class TouchpadService : AccessibilityService() {
         } else {
             if (cursor.displayId != external.displayId) cursor.attach(external) else cursor.refreshBounds()
             // Si el panel aparece con el teclado ya abierto (se activó el touchpad), el teclado se aparta.
-            if (panel.show() && keyboard.isShown) onPanelSettled()
+            val created = panel.show()
+            if (created) frontPanel = panel.magnetPanel // la ventana recién añadida queda delante
+            if (created && keyboard.isShown) onPanelSettled()
         }
         // El teclado se mantiene con el touchpad desactivado; solo se cierra sin pantalla externa o con bloqueo.
         if (external == null || locked) keyboard.hide() else keyboard.relayout()

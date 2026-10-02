@@ -93,6 +93,17 @@ class OnScreenKeyboard(
             val params = lp ?: return
             prefs.edit().putInt(KEY_X, params.x).putInt(KEY_Y, params.y).apply()
         }
+
+        override fun bringToFront() {
+            val view = root ?: return
+            val params = lp ?: return
+            mover.cancel()
+            try {
+                wm.removeView(view)
+            } catch (_: Throwable) {
+            }
+            wm = OverlayLayer.addWithFallback(ctx, view, params, wm)
+        }
     }
 
     // Mueve la ventana de golpe o deslizando (acoplamiento del imán).
@@ -110,6 +121,9 @@ class OnScreenKeyboard(
     // Posición de la ventana que marca el dedo al arrastrar, sin el efecto del imán.
     private var rawX = 0
     private var rawY = 0
+
+    /** El usuario terminó de tocar el teclado (el servicio decide si hay que traerlo al frente). */
+    var onTouched: (() -> Unit)? = null
 
     /** Estado del touchpad (activado o no) y acción para activarlo o desactivarlo; los pone el servicio. */
     var touchpadState: () -> Boolean = { false }
@@ -205,7 +219,8 @@ class OnScreenKeyboard(
             addView(keys, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(grip, LinearLayout.LayoutParams(width, dp(FOOTER_DP)))
         }
-        val container = FrameLayout(ctx).apply {
+        val container = TouchEndFrameLayout(ctx).apply {
+            onTouchEnd = { onTouched?.invoke() }
             alpha = appearance.keyboardOpacity / 100f
             addView(cardView, FrameLayout.LayoutParams(width, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(margin, margin, margin, margin)
@@ -338,7 +353,8 @@ class OnScreenKeyboard(
         val h = r.measuredHeight
         val maxX = max(0, screen.width() - w)
         val maxY = max(0, screen.height() - h)
-        fun at(x: Int, y: Int) = android.graphics.Point(x.coerceIn(0, maxX), y.coerceIn(0, maxY))
+        val topLimit = ScreenInsets.top(ctx, wm)
+        fun at(x: Int, y: Int) = android.graphics.Point(x.coerceIn(0, maxX), y.coerceIn(topLimit, max(topLimit, maxY)))
 
         val wanted = at(params.x, params.y)
         val candidates = listOf(
@@ -696,7 +712,8 @@ class OnScreenKeyboard(
                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
                     )
                     rawX = (rawX + (e.rawX - lastX).toInt()).coerceIn(0, max(0, bounds.width() - params.width))
-                    rawY = (rawY + (e.rawY - lastY).toInt()).coerceIn(0, max(0, bounds.height() - r.measuredHeight))
+                    val top = ScreenInsets.top(ctx, wm)
+                    rawY = (rawY + (e.rawY - lastY).toInt()).coerceIn(top, max(top, bounds.height() - r.measuredHeight))
                     lastX = e.rawX
                     lastY = e.rawY
                     val snapper = magnet
@@ -727,7 +744,9 @@ class OnScreenKeyboard(
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         params.x = params.x.coerceIn(0, max(0, bounds.width() - params.width))
-        params.y = params.y.coerceIn(0, max(0, bounds.height() - r.measuredHeight))
+        // Nunca por encima de la barra de estado: ahí no se podría volver a tocar para moverlo.
+        val top = ScreenInsets.top(ctx, wm)
+        params.y = params.y.coerceIn(top, max(top, bounds.height() - r.measuredHeight))
         try {
             wm.updateViewLayout(r, params)
         } catch (_: Throwable) {

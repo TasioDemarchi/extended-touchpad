@@ -15,6 +15,9 @@ interface MagnetPanel {
 
     /** Guarda la posición actual como la que se recupera al reabrir. */
     fun persistPosition()
+
+    /** Trae el panel al frente de los demás (se quita y se vuelve a añadir su ventana). */
+    fun bringToFront()
 }
 
 /**
