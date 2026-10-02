@@ -28,6 +28,26 @@ La app incluye dos mosaicos de ajustes rápidos. Se agregan con los botones **Ag
 
 - **Touchpad:** activa y desactiva el touchpad. Muestra Activado, Desactivado, Esperando pantalla externa o Servicio apagado (en ese caso, al tocarlo abre los ajustes de accesibilidad).
 - **Teclado:** abre y cierra el teclado. Muestra Abierto, Cerrado, Sin pantalla externa o Servicio apagado. No depende del touchpad.
+- **Audio:** cada toque pasa al siguiente dispositivo de salida de audio (ver «Mosaico de audio»).
+
+## Mosaico de audio
+
+Al conectar un monitor o TV, el audio suele salir por sus parlantes. El mosaico **Audio** del centro de control pasa, en cada toque, al **siguiente dispositivo de salida** (parlante interno, monitor HDMI/DisplayPort, auriculares con cable, Bluetooth…) y vuelve a empezar al llegar al final. Se agrega con el botón **Agregar Audio** de la app.
+
+- **Icono del mosaico:** unos auriculares, fijo (el panel de Lenovo no repintaba de forma fiable un icono dinámico); el nombre del dispositivo actual va en el texto del mosaico. En la pantalla de cambio, el icono del dispositivo nuevo es el símbolo **USB** (por cable) o el de **Bluetooth** (inalámbrico), con el color de acento.
+- **Aviso:** al cambiar aparece un mensaje corto con el dispositivo elegido. Usa el nombre real si el sistema lo ofrece (Bluetooth, monitor que informa su modelo) y, si no, uno genérico: «Parlante interno», «Monitor HDMI», «Auriculares con cable», «Auriculares USB», «Dispositivo Bluetooth». Los nombres de nodos de hardware como `soc:qcom,msm-ext-disp` se tratan como «no informa nombre».
+- **Lista dinámica:** se actualiza sola al conectar o desconectar una salida (`AudioDeviceCallback`).
+- **Requiere el servicio de accesibilidad activo.** Sin él, el mosaico abre el selector de audio del sistema para elegir a mano.
+
+**Cómo funciona.** Android no permite a una app normal elegir por dónde sale el audio de otras apps: `setCommunicationDevice` solo afecta a llamadas y elegir el dispositivo de medios exige `MODIFY_AUDIO_ROUTING`, reservado al sistema. Lo que sí permite es abrir el selector nativo (el diálogo «Dispositivos disponibles para salida de audio»; así lo hace también la app *Audio Output Switcher*, que deja elegir al usuario). `AudioOutputSwitcher` abre ese diálogo (`com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG`), lo lee con el servicio de accesibilidad, **toca la fila del siguiente dispositivo como lo haría el usuario** y lo cierra; el cambio real lo hace el sistema. Para que el diálogo no se vea, mientras trabaja por debajo se muestra a pantalla completa una **pantalla oscura** (`AudioCover`) que, al terminar, muestra el icono y el nombre del dispositivo nuevo durante 0,8 s; si no se puede mostrar, el diálogo se ve un instante y el cambio sigue igual. El sondeo es de 40 ms y el diálogo se cierra 300 ms después del toque.
+
+`MediaRouter2` (API pública) no sirve para evitar el diálogo: en la Legion Tab 5 solo expone la ruta «Tablet», no la del monitor HDMI.
+
+- Las filas no tienen identificadores de vista, así que se reconocen por su forma: una fila tocable con el control de volumen es el dispositivo actual; debajo, una fila tocable con un único texto por dispositivo; la última puede ser «Conectar un dispositivo» (se descarta por texto en varios idiomas); y un botón «Listo» para cerrar.
+- El diálogo pone el dispositivo actual arriba y reordena tras cada cambio, así que el ciclo usa un **orden propio y estable** (el de primera aparición, guardado en la preferencia `audio_order`).
+- El dispositivo actual y su tipo se leen con `AudioManager.getAudioDevicesForAttributes` (API 33, pública).
+- Probado en la Legion Tab 5 (ZUI): parlante interno → monitor HDMI → parlante interno. **Depende del diseño del diálogo de Lenovo**: si lo cambian, habría que ajustar el reconocimiento de filas.
+- `uiautomator dump` no sirve para depurarlo en esta tablet (vuelca la ventana del TV); usar un volcado propio con `windowsOnAllDisplays`.
 
 ## Mantener el servicio activo
 
@@ -50,6 +70,18 @@ Por defecto los paneles son overlays de accesibilidad, que Android dibuja por en
 - Sin el permiso, con el interruptor apagado o si algo falla al crear la ventana, se usa la capa de accesibilidad de siempre (queda anotado en el registro): nunca se pierde el panel.
 - Al conceder o retirar el permiso, o cambiar el interruptor, los paneles se reconstruyen solos.
 - Implementación en `OverlayLayer.kt`. Un contexto de ventana de tipo overlay solo se puede crear a partir de un contexto asociado a una pantalla: `service.createDisplayContext(display).createWindowContext(type, null)`; pedírselo directamente al servicio lanza `UnsupportedOperationException` y tumba el servicio al conectarse.
+
+## Color de acento
+
+12 colores a elegir (azul, cian, verde azulado, verde, lima, amarillo, naranja, rojo, rosa, violeta, índigo y gris azulado), o el interruptor **Usar el color de la tablet**, que sigue el color de acento del sistema (paleta dinámica *Material You*, `android.R.color.system_accent1_500`, Android 12+). Se vuelve a leer al abrir la app y al encender o desbloquear la tablet, y los paneles se reconstruyen solos si cambia. El acento se usa en las teclas pulsadas, la tecla de mayúsculas activa, el icono de teclado o touchpad activo, el cursor mientras se arrastra y el icono de la pantalla de cambio de audio. Si Lenovo (ZUI) tuviera un color de acento propio distinto del de Android, este ajuste sigue el de Android.
+
+## Icono
+
+Icono adaptable (`res/mipmap-anydpi/ic_launcher*.xml`): un touchpad con un cursor violeta encima sobre un degradado azul oscuro-violeta, con capa monocroma para los iconos con tema de Android 13+. Fondo, primer plano y monocromo son vectores en `res/drawable/ic_launcher_*.xml`; el contenido está dentro de la zona segura (≈66 dp de 108) para que ninguna máscara lo recorte.
+
+## Tema de la app
+
+La pantalla de ajustes tiene tema **oscuro** (por defecto), **claro** o **del sistema** (sigue el tema claro u oscuro de la tablet), en **Apariencia → Tema de la aplicación**. Es independiente del tema de los paneles. Además, **el color de acento elegido (o el de la tablet) se aplica también a la propia app**: botones, interruptores, deslizadores, marcas y selecciones. El color de texto sobre el acento se elige solo (casi negro con acentos muy claros, como el amarillo). `Palette` (en `Ui.kt`) calcula los colores al pedirlos; al cambiar de tema o de acento, `SettingsActivity.rebuildUi()` repinta la pantalla conservando el scroll. La cortina oscura del cambio de audio no cambia con el tema.
 
 ## Imán entre paneles
 

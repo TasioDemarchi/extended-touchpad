@@ -1,12 +1,24 @@
 package dev.tasio.extendedtouchpad
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 
 /** Apariencia configurable del panel, el teclado y el cursor. Se lee de las preferencias al construir las vistas. */
 class Appearance(private val prefs: SharedPreferences) {
     val dark: Boolean get() = prefs.getBoolean(KEY_DARK, false)
-    val accent: Int get() = prefs.getInt(KEY_ACCENT, ACCENTS.first())
+    /** Tema de la propia app (pantalla de ajustes): oscuro, claro o el del sistema. Los paneles tienen el suyo. */
+    val appTheme: String get() = prefs.getString(KEY_APP_THEME, APP_THEME_DARK) ?: APP_THEME_DARK
+
+    /** Si está activo, el acento es el color de la tablet (Material You) en lugar de uno elegido a mano. */
+    val useSystemAccent: Boolean get() = prefs.getBoolean(KEY_ACCENT_SYSTEM, false)
+
+    val accent: Int
+        get() = if (useSystemAccent && prefs.contains(KEY_SYSTEM_ACCENT_COLOR)) {
+            prefs.getInt(KEY_SYSTEM_ACCENT_COLOR, ACCENTS.first())
+        } else {
+            prefs.getInt(KEY_ACCENT, ACCENTS.first())
+        }
     val cursorDp: Int get() = prefs.getInt(KEY_CURSOR_DP, DEFAULT_CURSOR_DP)
     val cursorShape: CursorShape get() = CursorShape.fromName(prefs.getString(KEY_CURSOR_SHAPE, null))
     /** Si está activo, el panel del touchpad y el teclado se imantan entre sí. */
@@ -45,14 +57,27 @@ class Appearance(private val prefs: SharedPreferences) {
 
     fun resetAll() {
         prefs.edit()
-            .remove(KEY_DARK).remove(KEY_ACCENT).remove(KEY_CURSOR_DP).remove(KEY_CURSOR_COLOR).remove(KEY_CURSOR_SHAPE)
+            .remove(KEY_DARK).remove(KEY_ACCENT).remove(KEY_ACCENT_SYSTEM).remove(KEY_APP_THEME).remove(KEY_CURSOR_DP).remove(KEY_CURSOR_COLOR).remove(KEY_CURSOR_SHAPE)
             .remove(KEY_PAD_OPACITY).remove(KEY_KB_OPACITY)
             .apply()
     }
 
     fun setMagnet(value: Boolean) = prefs.edit().putBoolean(KEY_MAGNET, value).apply()
     fun setDark(value: Boolean) = prefs.edit().putBoolean(KEY_DARK, value).apply()
-    fun setAccent(value: Int) = prefs.edit().putInt(KEY_ACCENT, value).apply()
+    fun setAccent(value: Int) = prefs.edit().putInt(KEY_ACCENT, value).putBoolean(KEY_ACCENT_SYSTEM, false).apply()
+    fun setAppTheme(value: String) = prefs.edit().putString(KEY_APP_THEME, value).apply()
+    fun setUseSystemAccent(value: Boolean) = prefs.edit().putBoolean(KEY_ACCENT_SYSTEM, value).apply()
+
+    /**
+     * Lee el color de acento actual del sistema (paleta dinámica de Android 12+) y lo guarda. Si cambió y se está usando,
+     * la escritura dispara la reconstrucción de los paneles.
+     */
+    fun refreshSystemAccent(context: Context) {
+        val color = context.getColor(android.R.color.system_accent1_500)
+        if (!prefs.contains(KEY_SYSTEM_ACCENT_COLOR) || prefs.getInt(KEY_SYSTEM_ACCENT_COLOR, 0) != color) {
+            prefs.edit().putInt(KEY_SYSTEM_ACCENT_COLOR, color).apply()
+        }
+    }
     fun setCursorDp(value: Int) = prefs.edit().putInt(KEY_CURSOR_DP, value.coerceIn(MIN_CURSOR_DP, MAX_CURSOR_DP)).apply()
     fun setCursorShape(value: CursorShape) = prefs.edit().putString(KEY_CURSOR_SHAPE, value.name).apply()
     fun setCursorColor(value: Int) = prefs.edit().putInt(KEY_CURSOR_COLOR, value).apply()
@@ -61,6 +86,12 @@ class Appearance(private val prefs: SharedPreferences) {
         const val KEY_MAGNET = "ap_magnet"
         const val KEY_DARK = "ap_dark"
         const val KEY_ACCENT = "ap_accent"
+        const val KEY_ACCENT_SYSTEM = "ap_accent_system"
+        const val KEY_APP_THEME = "ap_app_theme"
+        const val APP_THEME_DARK = "dark"
+        const val APP_THEME_LIGHT = "light"
+        const val APP_THEME_SYSTEM = "system"
+        const val KEY_SYSTEM_ACCENT_COLOR = "ap_system_accent"
         const val KEY_CURSOR_DP = "ap_cursor_dp"
         const val KEY_CURSOR_COLOR = "ap_cursor_color"
         const val KEY_CURSOR_SHAPE = "ap_cursor_shape"
@@ -74,10 +105,17 @@ class Appearance(private val prefs: SharedPreferences) {
 
         val ACCENTS = listOf(
             Color.rgb(30, 136, 229), // azul
+            Color.rgb(0, 172, 193), // cian
+            Color.rgb(0, 150, 136), // verde azulado
             Color.rgb(67, 160, 71), // verde
+            Color.rgb(139, 195, 74), // lima
+            Color.rgb(253, 216, 53), // amarillo
             Color.rgb(251, 140, 0), // naranja
-            Color.rgb(142, 36, 170), // violeta
             Color.rgb(229, 57, 53), // rojo
+            Color.rgb(236, 64, 122), // rosa
+            Color.rgb(142, 36, 170), // violeta
+            Color.rgb(92, 107, 192), // índigo
+            Color.rgb(120, 144, 156), // gris azulado
         )
 
         val CURSOR_COLORS = listOf(

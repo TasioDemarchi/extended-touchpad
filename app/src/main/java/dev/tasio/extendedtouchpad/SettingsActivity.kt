@@ -31,6 +31,8 @@ import android.widget.Toast
  */
 class SettingsActivity : Activity() {
     private lateinit var ui: Ui
+    private lateinit var scroll: ScrollView
+    private lateinit var content: LinearLayout
     private lateinit var appearance: Appearance
 
     private lateinit var chipsHolder: LinearLayout
@@ -54,9 +56,11 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         ui = Ui(this)
         appearance = Appearance(getSharedPreferences("touchpad", MODE_PRIVATE))
+        appearance.refreshSystemAccent(this)
 
-        val content = ui.vertical().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)) }
-        val scroll = ScrollView(this).apply {
+        Palette.configure(this, appearance)
+        content = ui.vertical().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)) }
+        scroll = ScrollView(this).apply {
             setBackgroundColor(Palette.BG)
             isVerticalScrollBarEnabled = false
             addView(content)
@@ -68,7 +72,31 @@ class SettingsActivity : Activity() {
             }
         }
         setContentView(scroll)
+        applyPalette()
+        buildContent()
+    }
 
+    /** Fondo y color de los iconos de la barra de estado según el tema de la app. */
+    private fun applyPalette() {
+        scroll.setBackgroundColor(Palette.BG)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Palette.BG))
+        window.insetsController?.setSystemBarsAppearance(
+            if (Palette.isDark) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+        )
+    }
+
+    /** Cambió el tema de la app o el acento: se repinta toda la pantalla sin perder el punto de scroll. */
+    private fun rebuildUi() {
+        Palette.configure(this, appearance)
+        val y = scroll.scrollY
+        applyPalette()
+        buildContent()
+        scroll.post { scroll.scrollTo(0, y) }
+    }
+
+    private fun buildContent() {
+        content.removeAllViews()
         chipsHolder = ui.horizontal().apply { gravity = Gravity.START }
         setupHolder = ui.card()
         keepAliveHolder = ui.card()
@@ -121,6 +149,10 @@ class SettingsActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // El servicio puede haberse activado en Ajustes, y la transparencia también se cambia desde los paneles.
+        appearance.refreshSystemAccent(this)
+        val before = Palette.signature
+        Palette.configure(this, appearance)
+        if (Palette.signature != before) rebuildUi()
         TouchpadService.instance?.refreshOverlayLayer() // por si se concedió el permiso «Mostrar sobre otras apps»
         refreshDynamic()
         renderAppearance()
@@ -413,24 +445,28 @@ class SettingsActivity : Activity() {
     // ---------------------------------------------------------------- tutorial de los mosaicos
 
     private fun tilesCard() = ui.card().apply {
-        addView(ui.cardTitle("Atajos en el centro de control", "Activa el touchpad o abre el teclado sin entrar a la app."))
+        addView(ui.cardTitle("Atajos en el centro de control", "Activa el touchpad, abre el teclado o cambia la salida de audio sin entrar a la app."))
         addView(tilePreview(), ui.params(ui.match, ui.wrap, top = 16))
         addView(ui.stepRow(1, "Agrégalos", "Toca un botón de abajo y acepta el aviso de Android."), ui.params(ui.match, ui.wrap, top = 18))
         addView(
-            ui.stepRow(2, "¿No aparece el aviso?", "Baja el centro de control, toca el lápiz (editar) y arrastra «Touchpad» y «Teclado» a la zona de arriba."),
+            ui.stepRow(2, "¿No aparece el aviso?", "Baja el centro de control, toca el lápiz (editar) y arrastra «Touchpad», «Teclado» y «Audio» a la zona de arriba."),
             ui.params(ui.match, ui.wrap, top = 16),
         )
         addView(
-            ui.stepRow(3, "Úsalos", "«Touchpad» lo activa o desactiva. «Teclado» lo abre o lo cierra, aunque el touchpad esté apagado."),
+            ui.stepRow(3, "Úsalos", "«Touchpad» lo activa o desactiva. «Teclado» lo abre o lo cierra, aunque el touchpad esté apagado. «Audio» pasa al siguiente dispositivo de salida (parlante interno, monitor, auriculares, Bluetooth…): cada toque, uno más, y vuelve a empezar. Muestra un instante el selector de audio del sistema mientras lo cambia."),
             ui.params(ui.match, ui.wrap, top = 16),
         )
         addView(ui.horizontal().apply {
             addView(ui.primaryButton("Agregar Touchpad") { requestAddTile(TouchpadTileService::class.java, "Touchpad", R.drawable.ic_touchpad_tile) }, ui.params(0, ui.wrap, weight = 1f, end = 6))
             addView(ui.primaryButton("Agregar Teclado") { requestAddTile(KeyboardTileService::class.java, "Teclado", R.drawable.ic_keyboard_tile) }, ui.params(0, ui.wrap, weight = 1f, start = 6))
         }, ui.params(ui.match, ui.wrap, top = 20))
+        addView(
+            ui.primaryButton("Agregar Audio") { requestAddTile(AudioOutputTileService::class.java, "Audio", R.drawable.ic_audio_output) },
+            ui.params(ui.match, ui.wrap, top = 12),
+        )
     }
 
-    /** Maqueta de los dos mosaicos tal como se ven en el centro de control. */
+    /** Maqueta de los tres mosaicos tal como se ven en el centro de control. */
     private fun tilePreview() = ui.horizontal().apply {
         background = ui.shape(Palette.CARD_ALT, 16, Palette.STROKE)
         setPadding(ui.dp(14), ui.dp(14), ui.dp(14), ui.dp(14))
@@ -440,17 +476,18 @@ class SettingsActivity : Activity() {
             addView(
                 ImageView(this@SettingsActivity).apply {
                     setImageResource(icon)
-                    setColorFilter(if (on) Color.WHITE else Palette.TEXT2)
+                    setColorFilter(if (on) Palette.ON_ACCENT else Palette.TEXT2)
                 },
                 ui.params(ui.dp(22), ui.dp(22), end = 10),
             )
             addView(ui.vertical().apply {
-                addView(ui.text(name, 13f, if (on) Color.WHITE else Palette.TEXT, bold = true))
-                addView(ui.text(state, 11f, if (on) Color.argb(200, 255, 255, 255) else Palette.TEXT3))
+                addView(ui.text(name, 13f, if (on) Palette.ON_ACCENT else Palette.TEXT, bold = true))
+                addView(ui.text(state, 11f, if (on) Palette.ON_ACCENT else Palette.TEXT3))
             })
         }
-        addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 8))
-        addView(tile(R.drawable.ic_keyboard_tile, "Teclado", "Cerrado", false), ui.params(0, ui.wrap, weight = 1f, start = 8))
+        addView(tile(R.drawable.ic_touchpad_tile, "Touchpad", "Activado", true), ui.params(0, ui.wrap, weight = 1f, end = 6))
+        addView(tile(R.drawable.ic_keyboard_tile, "Teclado", "Cerrado", false), ui.params(0, ui.wrap, weight = 1f, start = 6, end = 6))
+        addView(tile(R.drawable.ic_audio_output, "Audio", "Parlante interno", false), ui.params(0, ui.wrap, weight = 1f, start = 6))
     }
 
     /** Pide a Android (13+) agregar un mosaico al centro de control. */
@@ -501,10 +538,33 @@ class SettingsActivity : Activity() {
         }, ui.params(ui.match, ui.wrap, top = 10))
 
         appearanceHolder.addView(ui.card().apply {
-            addView(ui.cardTitle("Tema y color de los paneles"))
+            addView(ui.cardTitle("Tema de la aplicación", "Solo cambia esta pantalla de ajustes. «Sistema» sigue el tema claro u oscuro de la tablet."))
+            addView(appThemeSegments(), ui.params(ui.match, ui.wrap, top = 16))
+        }, ui.params(ui.match, ui.wrap, top = 10))
+
+        appearanceHolder.addView(ui.card().apply {
+            addView(ui.cardTitle("Tema y color de los paneles", "El color de acento también se usa en esta pantalla."))
             addView(themeSegments(), ui.params(ui.match, ui.wrap, top = 16))
             addView(ui.text("Color de acento", 15f), ui.params(ui.match, ui.wrap, top = 20))
-            addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); renderAppearance() }, ui.params(ui.match, ui.wrap, top = 8))
+            addView(
+                ui.switchRow(
+                    "Usar el color de la tablet",
+                    "Sigue el color de acento del sistema (Material You) y se actualiza solo si cambia.",
+                    appearance.useSystemAccent,
+                ) { appearance.setUseSystemAccent(it); rebuildUi() },
+                ui.params(ui.match, ui.wrap, top = 10),
+            )
+            if (appearance.useSystemAccent) {
+                addView(
+                    ui.horizontal().apply {
+                        addView(swatches(listOf(appearance.accent), appearance.accent) { })
+                        addView(ui.text("Color actual de la tablet", 13f, Palette.TEXT2))
+                    },
+                    ui.params(ui.match, ui.wrap, top = 8),
+                )
+            } else {
+                addView(swatches(Appearance.ACCENTS, appearance.accent) { appearance.setAccent(it); rebuildUi() }, ui.params(ui.match, ui.wrap, top = 8))
+            }
         }, gap())
 
         appearanceHolder.addView(ui.card().apply {
@@ -529,23 +589,49 @@ class SettingsActivity : Activity() {
         appearanceHolder.post { appearanceHolder.minimumHeight = 0 }
     }
 
-    private fun themeSegments(): LinearLayout = ui.horizontal().apply {
+    /** Selector de opciones en una sola fila (segmentos). */
+    private fun segments(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit): LinearLayout = ui.horizontal().apply {
         background = ui.shape(Palette.CARD_ALT, 14, Palette.STROKE)
         setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4))
-        fun segment(label: String, selected: Boolean, onClick: () -> Unit) = TextView(this@SettingsActivity).apply {
-            text = label
-            textSize = 14f
-            gravity = Gravity.CENTER
-            minHeight = ui.dp(40)
-            setTextColor(if (selected) Color.WHITE else Palette.TEXT2)
-            if (selected) background = ui.shape(Palette.VIOLET_DEEP, 11)
-            setOnClickListener { onClick() }
+        for ((value, label) in options) {
+            val isSelected = value == selected
+            addView(
+                TextView(this@SettingsActivity).apply {
+                    text = label
+                    textSize = 14f
+                    gravity = Gravity.CENTER
+                    minHeight = ui.dp(40)
+                    setTextColor(if (isSelected) Palette.ON_ACCENT else Palette.TEXT2)
+                    if (isSelected) background = ui.shape(Palette.VIOLET_DEEP, 11)
+                    setOnClickListener { onPick(value) }
+                },
+                ui.params(0, ui.wrap, weight = 1f),
+            )
         }
-        addView(segment("Claro", !appearance.dark) { appearance.setDark(false); renderAppearance() }, ui.params(0, ui.wrap, weight = 1f))
-        addView(segment("Oscuro", appearance.dark) { appearance.setDark(true); renderAppearance() }, ui.params(0, ui.wrap, weight = 1f))
     }
 
-    private fun swatches(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.horizontal().apply {
+    /** Tema de los paneles (claro u oscuro). */
+    private fun themeSegments(): LinearLayout =
+        segments(listOf("light" to "Claro", "dark" to "Oscuro"), if (appearance.dark) "dark" else "light") {
+            appearance.setDark(it == "dark")
+            renderAppearance()
+        }
+
+    /** Tema de la propia app: oscuro, claro o el del sistema. */
+    private fun appThemeSegments(): LinearLayout = segments(
+        listOf(Appearance.APP_THEME_DARK to "Oscuro", Appearance.APP_THEME_LIGHT to "Claro", Appearance.APP_THEME_SYSTEM to "Sistema"),
+        appearance.appTheme,
+    ) {
+        appearance.setAppTheme(it)
+        rebuildUi()
+    }
+
+    /** Muestras de color en filas de 6, para que no se salgan de la tarjeta. */
+    private fun swatches(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.vertical().apply {
+        for (chunk in colors.chunked(SWATCHES_PER_ROW)) addView(swatchRow(chunk, selected, onPick))
+    }
+
+    private fun swatchRow(colors: List<Int>, selected: Int, onPick: (Int) -> Unit): LinearLayout = ui.horizontal().apply {
         for (color in colors) {
             val isSelected = color == selected
             val swatch = View(this@SettingsActivity).apply {
@@ -611,5 +697,9 @@ class SettingsActivity : Activity() {
             CursorGlyph.draw(canvas, side, d, shape, color, outline)
             canvas.restore()
         }
+    }
+
+    private companion object {
+        const val SWATCHES_PER_ROW = 6
     }
 }
